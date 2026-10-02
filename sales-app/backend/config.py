@@ -2,10 +2,12 @@
 import os
 import logging
 from datetime import datetime
+from pathlib import Path
 from dotenv import load_dotenv
 
-# .env 파일 로드
-load_dotenv()
+# .env 파일 로드 (config.py와 같은 디렉토리)
+env_path = Path(__file__).parent / '.env'
+load_dotenv(dotenv_path=env_path)
 
 # 로깅 설정
 logging.basicConfig(
@@ -29,6 +31,18 @@ APP_VERSION = "1.0.0"
 
 # 현재 연도 (동적)
 CURRENT_YEAR = int(os.getenv("CURRENT_YEAR", datetime.now().year))
+
+# Google Sheets 설정 (년도별 스프레드시트)
+SPREADSHEET_IDS = {
+    2026: os.getenv("SPREADSHEET_2026", "1QIogC0pcxcIQJGbXLH_Ta4EG6herT05RhCG4rwQnm6c"),
+    2027: os.getenv("SPREADSHEET_2027", ""),  # 2027년 시트 ID (나중에 추가)
+}
+
+# 현재 연도 스프레드시트 ID
+CURRENT_SPREADSHEET_ID = SPREADSHEET_IDS.get(CURRENT_YEAR, "")
+
+# Credentials 파일 경로
+GOOGLE_CREDENTIALS_FILE = os.getenv("GOOGLE_CREDENTIALS_FILE", str(Path(__file__).parent / "credentials.json"))
 
 # CORS 설정 - 환경변수로 추가 origin 지정 가능
 _cors_env = os.getenv("CORS_ORIGINS", "")

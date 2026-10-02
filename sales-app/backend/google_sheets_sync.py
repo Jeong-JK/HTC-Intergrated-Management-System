@@ -10,12 +10,14 @@ import pymysql
 import json
 import os
 from datetime import datetime
+from pathlib import Path
 from config import DB_HOST, DB_USER, DB_PASSWORD, DB_NAME
+from config import CURRENT_YEAR, CURRENT_SPREADSHEET_ID, GOOGLE_CREDENTIALS_FILE
 
 # 설정
-CREDENTIALS_FILE = '/home/ec2-user/sales-app/backend/credentials.json'
-SPREADSHEET_ID = '1QIogC0pcxcIQJGbXLH_Ta4EG6herT05RhCG4rwQnm6c'
-DATA_DIR = '/home/ec2-user/sales-app/backend/sheet_data'
+CREDENTIALS_FILE = GOOGLE_CREDENTIALS_FILE
+SPREADSHEET_ID = CURRENT_SPREADSHEET_ID
+DATA_DIR = str(Path(__file__).parent / 'sheet_data')
 
 DB_CONFIG = {
     'host': DB_HOST,
@@ -25,11 +27,11 @@ DB_CONFIG = {
     'charset': 'utf8mb4'
 }
 
-# 동기화할 시트 목록
+# 동기화할 시트 목록 (현재 년도 기준)
 SYNC_SHEETS = [
-    '2026Y 매입',
-    '2026Y 프로젝트',
-    '2026Y Weekly'
+    f'{CURRENT_YEAR}Y 매입',
+    f'{CURRENT_YEAR}Y 프로젝트',
+    f'{CURRENT_YEAR}Y Weekly'
 ]
 
 

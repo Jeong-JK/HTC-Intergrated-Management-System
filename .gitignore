@@ -46,3 +46,42 @@ htc-partner-crm-v2_0_7.py
 
 # Uploads (user data)
 **/uploads/
+
+# Development/AI files
+.claude/
+**/.claude/
+CLAUDE.md
+**/CLAUDE.md
+
+# Test files
+test_*.py
+**/test_*.py
+check_*.py
+**/check_*.py
+verify_*.py
+**/verify_*.py
+
+# Migration scripts
+migrate_*.py
+**/migrate_*.py
+adjust_*.py
+**/adjust_*.py
+import_*.py
+**/import_*.py
+
+# Export/HTML files
+*.html
+**/*.html
+
+# Screenshots/temp folders
+12345/
+**/12345/
+
+# Google API temp files
+googledrive.json
+htc_oauth_client.json
+google_drive_helper.py
+
+# Deploy scripts
+deploy.sh
+**/deploy.sh

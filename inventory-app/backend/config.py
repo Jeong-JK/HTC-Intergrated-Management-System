@@ -1,10 +1,12 @@
 """HTC Inventory — Configuration"""
 import os
 import logging
+from pathlib import Path
 from dotenv import load_dotenv
 
-# .env 파일 로드
-load_dotenv()
+# .env 파일 로드 (config.py와 같은 디렉토리)
+env_path = Path(__file__).parent / '.env'
+load_dotenv(dotenv_path=env_path)
 
 # 로깅 설정
 logging.basicConfig(
