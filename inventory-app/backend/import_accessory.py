@@ -1,0 +1,209 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+악세사리 데이터 Import 스크립트
+악세사리.html을 파싱하여 items 테이블에 입력
+"""
+
+import pandas as pd
+import re
+from datetime import datetime
+from database import get_connection
+
+def clean_currency(value):
+    """통화 기호 및 쉼표 제거"""
+    if pd.isna(value) or value == '':
+        return 0.0
+
+    value_str = str(value)
+    cleaned = re.sub(r'[$₩,]', '', value_str)
+
+    try:
+        return float(cleaned)
+    except (ValueError, TypeError):
+        return 0.0
+
+def parse_date(date_str):
+    """날짜 형식 변환"""
+    if pd.isna(date_str) or date_str == '' or date_str == 'NaN':
+        return None
+
+    date_str = str(date_str).strip()
+
+    # 이미 YYYY-MM-DD 형식인 경우
+    if re.match(r'^\d{4}-\d{2}-\d{2}$', date_str):
+        return date_str
+
+    # '2026. 1. 9' 형식
+    if '.' in date_str:
+        try:
+            parts = date_str.split('.')
+            if len(parts) == 3:
+                year = parts[0].strip()
+                month = parts[1].strip().zfill(2)
+                day = parts[2].strip().zfill(2)
+                return f"{year}-{month}-{day}"
+        except (ValueError, IndexError):
+            pass
+
+    # 기타 특수한 값들은 None 처리
+    if date_str in ['?', '이사님 기증', '이사님기증']:
+        return None
+
+    return None
+
+def clean_string(value):
+    """문자열 정제"""
+    if pd.isna(value) or value == '' or value == 'NaN' or value == 'nan':
+        return ''
+    return str(value).strip()
+
+def import_accessory_data():
+    """악세사리 HTML 파일을 파싱하여 DB에 입력"""
+
+    print("=" * 80)
+    print("악세사리 데이터 Import 시작")
+    print("=" * 80)
+
+    # 1. 악세사리 파싱
+    print("\n[1/4] 악세사리.html 파싱 중...")
+    df = pd.read_html('/home/ec2-user/inventory-app/backend/악세사리.html')[0]
+    new_header = df.iloc[1]
+    df = df[3:]
+    df.columns = new_header
+    df = df.reset_index(drop=True)
+    print(f"   ✓ {len(df)}개 행 파싱 완료")
+
+    # 2. 데이터 정제
+    print("\n[2/4] 데이터 정제 중...")
+
+    records = []
+    skip_count = 0
+
+    for idx, row in df.iterrows():
+        status = clean_string(row['상태'])
+        if not status:  # 상태 없으면 건너뛰기
+            skip_count += 1
+            continue
+
+        rack_no = clean_string(row['Location'])
+        box_no = clean_string(row['BOX No'])
+        category = clean_string(row['Product Category'])
+        item_name = clean_string(row['Procuct Name'])
+        description = clean_string(row.get('Description', ''))
+        ip = clean_string(row['Serial / IP'])
+        serial = ''  # 악세사리는 Serial 컬럼 없음
+        mac = ''     # 악세사리는 MAC 컬럼 없음
+        license_key = ''  # 악세사리는 라이선스 컬럼 없음
+        quantity = int(row['수량']) if pd.notna(row['수량']) else 1
+        note = clean_string(row.get('비고', ''))
+        purchase_date = parse_date(row['매입일'])
+        unit_price = clean_currency(row['단가'])
+        exchange_rate = clean_currency(row['환율'])
+
+        records.append({
+            'item_type': '악세사리',
+            'rack_no': rack_no,
+            'box_no': box_no,
+            'category': category,
+            'item_name': item_name,
+            'description': description,
+            'ip': ip,
+            'serial': serial,
+            'mac': mac,
+            'license_key': license_key,
+            'quantity': quantity,
+            'status': status,
+            'note': note,
+            'purchase_date': purchase_date,
+            'unit_price': unit_price,
+            'exchange_rate': exchange_rate
+        })
+
+    print(f"   ✓ {len(records)}개 레코드 정제 완료 (상태 없는 {skip_count}개 제외)")
+
+    # 3. DB 연결 및 기존 데이터 삭제
+    print("\n[3/4] 기존 악세사리 데이터 삭제 중...")
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        # 기존 악세사리 데이터 개수 확인
+        cursor.execute("SELECT COUNT(*) AS count FROM items WHERE item_type='악세사리'")
+        result = cursor.fetchone()
+        old_count = result['count'] if result else 0
+        print(f"   ℹ 기존 악세사리 데이터: {old_count}개")
+
+        # 악세사리 데이터 삭제
+        cursor.execute("DELETE FROM items WHERE item_type='악세사리'")
+        conn.commit()
+        print(f"   ✓ 기존 악세사리 데이터 삭제 완료")
+
+        # 4. 새 데이터 INSERT
+        print("\n[4/4] 새 악세사리 데이터 INSERT 중...")
+
+        insert_query = """
+        INSERT INTO items
+        (item_type, rack_no, box_no, category, item_name, description,
+         ip, serial, mac, license_key, quantity, status, note,
+         purchase_date, unit_price, exchange_rate)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """
+
+        success_count = 0
+        error_count = 0
+
+        for record in records:
+            try:
+                cursor.execute(insert_query, (
+                    record['item_type'],
+                    record['rack_no'],
+                    record['box_no'],
+                    record['category'],
+                    record['item_name'],
+                    record['description'],
+                    record['ip'],
+                    record['serial'],
+                    record['mac'],
+                    record['license_key'],
+                    record['quantity'],
+                    record['status'],
+                    record['note'],
+                    record['purchase_date'],
+                    record['unit_price'],
+                    record['exchange_rate']
+                ))
+                success_count += 1
+            except Exception as e:
+                error_count += 1
+                print(f"   ✗ 에러: {e}")
+                print(f"      데이터: {record}")
+
+        conn.commit()
+
+        print(f"\n   ✓ 성공: {success_count}개")
+        if error_count > 0:
+            print(f"   ✗ 실패: {error_count}개")
+
+        # 최종 확인
+        cursor.execute("SELECT COUNT(*) AS count FROM items WHERE item_type='악세사리'")
+        result = cursor.fetchone()
+        new_count = result['count'] if result else 0
+
+        print("\n" + "=" * 80)
+        print("악세사리 Import 완료!")
+        print("=" * 80)
+        print(f"기존 데이터: {old_count}개")
+        print(f"새 데이터: {new_count}개")
+        print("=" * 80)
+
+    except Exception as e:
+        conn.rollback()
+        print(f"\n✗ 에러 발생: {e}")
+        raise
+    finally:
+        cursor.close()
+        conn.close()
+
+if __name__ == '__main__':
+    import_accessory_data()

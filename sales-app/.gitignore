@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+
+# Environment variables
+.env
+backend/.env
+
+# Logs
+*.log
+nohup.out
+
+# Credentials (sensitive)
+backend/credentials.json
+credentials.json
+
+# Build outputs
+frontend/dist/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.swp
+
+# Sheet data cache
+backend/sheet_data/

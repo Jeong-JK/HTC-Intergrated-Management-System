@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Environment variables (sensitive)
+.env
+*/.env
+*/backend/.env
+
+# Credentials (sensitive)
+credentials.json
+**/credentials.json
+*.pem
+*.key
+
+# Logs
+*.log
+nohup.out
+
+# Build outputs
+**/dist/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# Cache
+.cache/
+**/sheet_data/
+
+# Backup/legacy files
+*.bak
+htc-partner-crm-v2_0_7.py
+
+# Uploads (user data)
+**/uploads/
