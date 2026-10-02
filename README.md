@@ -127,7 +127,8 @@ cd [app]/frontend && npm run build
 
 ## 스크린샷
 
-(추후 추가)
+<img width="946" height="607" alt="image" src="https://github.com/user-attachments/assets/014863f5-ef98-432c-b16c-46c6e589688c" />
+
 
 ## 라이선스
 
