@@ -101,7 +101,7 @@ const weekIndexToDate = (weekIndex) => {
   return `2026-${paddedMonth}-${paddedDay}`
 }
 
-export default function WeeklyTab({ year, isActive }) {
+export default function WeeklyTab({ year, isActive, hideDone }) {
   const [schedules, setSchedules] = useState([])
   const [loading, setLoading] = useState(true)
   const [editingBarNote, setEditingBarNote] = useState(null) // { id, value }
@@ -168,7 +168,7 @@ export default function WeeklyTab({ year, isActive }) {
   }
 
   // 스케줄 정렬 (같은 프로젝트끼리 연속 배치되도록)
-  const sortedSchedules = [...schedules].sort((a, b) => {
+  const sortedSchedules = schedules.filter(s => !(hideDone && s.project_status === '완료')).sort((a, b) => {
     const keyA = a.project_no || a.customer_project || `_id_${a.id}`
     const keyB = b.project_no || b.customer_project || `_id_${b.id}`
     return keyA.localeCompare(keyB)

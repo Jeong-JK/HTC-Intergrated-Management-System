@@ -59,7 +59,7 @@ const getPaymentStatusStyle = (percent) => {
   return { backgroundColor: '#f87171', color: '#ffffff' }
 }
 
-export default function ProjectsTab({ year, isActive }) {
+export default function ProjectsTab({ year, isActive, hideDone }) {
   const [projects, setProjects] = useState([])
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -527,7 +527,7 @@ export default function ProjectsTab({ year, isActive }) {
       p.project_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.customer?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.project_name?.toLowerCase().includes(searchTerm.toLowerCase())
-    return matchSearch
+    return matchSearch && !(hideDone && p.status === '완료')
   })
 
   // 프로젝트별로 행 데이터 생성 (row_index로 판매/매입 매칭)

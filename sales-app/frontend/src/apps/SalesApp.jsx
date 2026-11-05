@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Home, TrendingUp, MessageSquare, RefreshCw, ToggleLeft, ToggleRight } from 'lucide-react'
+import { Home, TrendingUp, MessageSquare, RefreshCw, ToggleLeft, ToggleRight, Eye, EyeOff } from 'lucide-react'
 import PurchasesTab from '../components/PurchasesTab'
 import ProjectsTab from '../components/ProjectsTab'
 import WeeklyTab from '../components/WeeklyTab'
@@ -22,6 +22,7 @@ export default function SalesApp() {
   const [sheetViewMode, setSheetViewMode] = useState(false)  // 시트 뷰 모드
   const [syncing, setSyncing] = useState(false)
   const [syncStatus, setSyncStatus] = useState(null)
+  const [hideDone, setHideDone] = useState(false)  // 완료 프로젝트 화면에서만 숨김 (통계/금액은 서버 값 그대로)
 
   const goToMainHub = () => {
     const protocol = window.location.protocol
@@ -116,6 +117,18 @@ export default function SalesApp() {
               <MessageSquare size={22} />
               Dashboard
             </a>
+            <button
+              onClick={() => setHideDone(!hideDone)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${
+                hideDone
+                  ? 'bg-slate-700 border-slate-700 text-white hover:bg-slate-800'
+                  : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'
+              }`}
+              title={hideDone ? '완료된 프로젝트도 다시 표시' : '프로젝트/Weekly에서 완료된 행 숨기기'}
+            >
+              {hideDone ? <Eye size={16} /> : <EyeOff size={16} />}
+              <span className="text-sm font-medium">{hideDone ? '전체 보기' : '완료 숨기기'}</span>
+            </button>
           </div>
 
           {/* Right side controls */}
@@ -195,8 +208,8 @@ export default function SalesApp() {
             // 일반 뷰 모드
             <>
               {activeTab === 'purchases' && <PurchasesTab year={year} />}
-              {activeTab === 'projects' && <ProjectsTab year={year} isActive={activeTab === 'projects'} />}
-              {activeTab === 'weekly' && <WeeklyTab year={year} isActive={activeTab === 'weekly'} />}
+              {activeTab === 'projects' && <ProjectsTab year={year} isActive={activeTab === 'projects'} hideDone={hideDone} />}
+              {activeTab === 'weekly' && <WeeklyTab year={year} isActive={activeTab === 'weekly'} hideDone={hideDone} />}
             </>
           )}
         </div>
