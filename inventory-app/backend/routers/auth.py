@@ -114,6 +114,11 @@ class UserUpdate(BaseModel):
     can_delete_meeting: Optional[bool] = None
     can_edit_contact: Optional[bool] = None
     can_transfer_contact: Optional[bool] = None
+    can_access_worklog: Optional[bool] = None
+    can_write_worklog: Optional[bool] = None
+    can_edit_worklog: Optional[bool] = None
+    can_delete_worklog: Optional[bool] = None
+    can_manage_worklog: Optional[bool] = None
 
 class ProfileUpdate(BaseModel):
     email: Optional[str] = None
@@ -125,7 +130,8 @@ PERMISSION_FIELDS = [
     'can_delete', 'can_access_sales', 'can_edit_purchase', 'can_delete_purchase',
     'can_edit_project', 'can_delete_project', 'can_edit_weekly', 'can_delete_weekly',
     'can_add_company', 'can_edit_company', 'can_delete_company',
-    'can_view_meeting', 'can_add_meeting', 'can_delete_meeting', 'can_edit_contact', 'can_transfer_contact'
+    'can_view_meeting', 'can_add_meeting', 'can_delete_meeting', 'can_edit_contact', 'can_transfer_contact',
+    'can_access_worklog', 'can_write_worklog', 'can_edit_worklog', 'can_delete_worklog', 'can_manage_worklog'
 ]
 
 # ========== Auth Endpoints ==========

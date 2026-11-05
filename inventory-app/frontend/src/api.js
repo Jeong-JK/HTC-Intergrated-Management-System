@@ -107,3 +107,11 @@ export const getUnreadCommentNotificationCount = () => api.get('/notifications/c
 export const markNotificationAsRead          = (id) => api.post(`/notifications/comments/${id}/read`)
 export const markAllNotificationsAsRead      = ()   => api.post('/notifications/comments/read-all')
 export const deleteReadNotifications         = ()   => api.delete('/notifications/comments/read')
+
+// Work Logs (업무일지 캘린더)
+export const getWorkLogs     = (params) => api.get('/work-logs', { params })
+export const getWorkLogUsers = ()       => api.get('/work-logs/users')
+export const getWorkLogMissing = (day)  => api.get('/work-logs/missing', { params: { day } })
+export const createWorkLog   = (data)   => api.post('/work-logs', data)
+export const updateWorkLog   = (id, d)  => api.put(`/work-logs/${id}`, d)
+export const deleteWorkLog   = (id)     => api.delete(`/work-logs/${id}`)

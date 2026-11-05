@@ -29,7 +29,12 @@ export default function UserManagement() {
     can_add_meeting: false,
     can_delete_meeting: false,
     can_edit_contact: false,
-    can_transfer_contact: false
+    can_transfer_contact: false,
+    can_access_worklog: false,
+    can_write_worklog: false,
+    can_edit_worklog: false,
+    can_delete_worklog: false,
+    can_manage_worklog: false
   })
   const [error, setError] = useState('')
 
@@ -72,7 +77,12 @@ export default function UserManagement() {
       can_add_meeting: false,
       can_delete_meeting: false,
       can_edit_contact: false,
-      can_transfer_contact: false
+      can_transfer_contact: false,
+      can_access_worklog: false,
+      can_write_worklog: false,
+      can_edit_worklog: false,
+      can_delete_worklog: false,
+      can_manage_worklog: false
     })
     setError('')
     setShowModal(true)
@@ -104,7 +114,12 @@ export default function UserManagement() {
       can_add_meeting: !!u.can_add_meeting,
       can_delete_meeting: !!u.can_delete_meeting,
       can_edit_contact: !!u.can_edit_contact,
-      can_transfer_contact: !!u.can_transfer_contact
+      can_transfer_contact: !!u.can_transfer_contact,
+      can_access_worklog: !!u.can_access_worklog,
+      can_write_worklog: !!u.can_write_worklog,
+      can_edit_worklog: !!u.can_edit_worklog,
+      can_delete_worklog: !!u.can_delete_worklog,
+      can_manage_worklog: !!u.can_manage_worklog
     })
     setError('')
     setShowModal(true)
@@ -139,7 +154,12 @@ export default function UserManagement() {
           can_add_meeting: form.can_add_meeting,
           can_delete_meeting: form.can_delete_meeting,
           can_edit_contact: form.can_edit_contact,
-          can_transfer_contact: form.can_transfer_contact
+          can_transfer_contact: form.can_transfer_contact,
+          can_access_worklog: form.can_access_worklog,
+          can_write_worklog: form.can_write_worklog,
+          can_edit_worklog: form.can_edit_worklog,
+          can_delete_worklog: form.can_delete_worklog,
+          can_manage_worklog: form.can_manage_worklog
         }
         if (form.password) {
           updateData.password = form.password
@@ -483,6 +503,33 @@ export default function UserManagement() {
                       <label className="flex items-center gap-2 cursor-pointer col-span-2">
                         <input type="checkbox" checked={form.can_transfer_contact} onChange={(e) => setForm({ ...form, can_transfer_contact: e.target.checked })} className="w-4 h-4 text-green-600 border-slate-300 rounded focus:ring-green-500" />
                         <span className="text-xs text-slate-600">이직 처리</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* 업무일지 권한 */}
+                  <div className="bg-orange-50 rounded-lg p-3 space-y-2">
+                    <div className="text-sm font-medium text-orange-700 mb-2">업무일지</div>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={form.can_access_worklog} onChange={(e) => setForm({ ...form, can_access_worklog: e.target.checked })} className="w-4 h-4 text-orange-600 border-slate-300 rounded focus:ring-orange-500" />
+                      <span className="text-sm text-slate-700">접근 권한</span>
+                    </label>
+                    <div className="grid grid-cols-2 gap-2 pl-2">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={form.can_write_worklog} onChange={(e) => setForm({ ...form, can_write_worklog: e.target.checked })} className="w-4 h-4 text-orange-600 border-slate-300 rounded focus:ring-orange-500" />
+                        <span className="text-xs text-slate-600">업무일지 작성</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={form.can_edit_worklog} onChange={(e) => setForm({ ...form, can_edit_worklog: e.target.checked })} className="w-4 h-4 text-orange-600 border-slate-300 rounded focus:ring-orange-500" />
+                        <span className="text-xs text-slate-600">업무일지 수정</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={form.can_delete_worklog} onChange={(e) => setForm({ ...form, can_delete_worklog: e.target.checked })} className="w-4 h-4 text-orange-600 border-slate-300 rounded focus:ring-orange-500" />
+                        <span className="text-xs text-slate-600">업무일지 삭제</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer col-span-2">
+                        <input type="checkbox" checked={form.can_manage_worklog} onChange={(e) => setForm({ ...form, can_manage_worklog: e.target.checked })} className="w-4 h-4 text-orange-600 border-slate-300 rounded focus:ring-orange-500" />
+                        <span className="text-xs text-slate-600">업무일지관리자 <span className="text-slate-400">(타인 열람만)</span></span>
                       </label>
                     </div>
                   </div>

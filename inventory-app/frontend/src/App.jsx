@@ -5,7 +5,9 @@ import LoginPage from './pages/LoginPage.jsx'
 import UserManagement from './pages/UserManagement.jsx'
 import BoardPage from './pages/BoardPage.jsx'
 import AdminDrive from './pages/AdminDrive.jsx'
+import WorkLogPage from './pages/WorkLogPage.jsx'
 import InventoryApp from './apps/InventoryApp.jsx'
+import { SITE } from './site.js'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -51,11 +53,17 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
+      {/* inv/cal 서브도메인은 해당 화면만 루트에 */}
+      {SITE === 'inventory' && <Route path="/*" element={<ProtectedRoute><InventoryApp /></ProtectedRoute>} />}
+      {SITE === 'worklog' && <Route path="/*" element={<ProtectedRoute><WorkLogPage /></ProtectedRoute>} />}
+      {SITE === 'hub' && <>
       <Route path="/" element={<ProtectedRoute><MainHub /></ProtectedRoute>} />
       <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
       <Route path="/admin-drive" element={<ProtectedRoute><AdminDrive /></ProtectedRoute>} />
       <Route path="/board" element={<ProtectedRoute><BoardPage /></ProtectedRoute>} />
+      <Route path="/work-log" element={<ProtectedRoute><WorkLogPage /></ProtectedRoute>} />
       <Route path="/inventory/*" element={<ProtectedRoute><InventoryApp /></ProtectedRoute>} />
+      </>}
     </Routes>
   )
 }

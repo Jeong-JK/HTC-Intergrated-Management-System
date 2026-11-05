@@ -203,6 +203,38 @@ CREATE TABLE IF NOT EXISTS post_comments (
     FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS work_log_masters (
+    id           BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id      INT        NOT NULL,             -- 작성자
+    start_date   DATE       NOT NULL,
+    end_date     DATE       NOT NULL,             -- 단일 날짜면 start_date와 동일
+    is_multi_day BOOLEAN    DEFAULT FALSE,
+    created_at   DATETIME   DEFAULT NOW(),
+    updated_at   DATETIME   DEFAULT NOW() ON UPDATE NOW(),
+    INDEX idx_wlm_range (start_date, end_date),
+    INDEX idx_wlm_user_range (user_id, start_date, end_date),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS work_log_items (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    master_id  BIGINT   NOT NULL,
+    item_order INT      NOT NULL DEFAULT 1,
+    content    TEXT     NOT NULL,
+    created_at DATETIME DEFAULT NOW(),
+    updated_at DATETIME DEFAULT NOW() ON UPDATE NOW(),
+    INDEX idx_wli_master (master_id, item_order),
+    FOREIGN KEY (master_id) REFERENCES work_log_masters(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 업무일지 권한 (기존 users 테이블에 컬럼 추가, 이미 있으면 무시)
+ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS can_access_worklog BOOLEAN DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS can_write_worklog  BOOLEAN DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS can_edit_worklog   BOOLEAN DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS can_delete_worklog BOOLEAN DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS can_manage_worklog BOOLEAN DEFAULT FALSE;
 """
 
 def init_db():

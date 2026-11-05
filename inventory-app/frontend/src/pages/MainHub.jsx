@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { Package, TrendingUp, Users, LogOut, Settings, Shield, UserCog, X, Check, Mail, Phone, Lock, MessageSquare, Clock, Banknote, HardDrive } from 'lucide-react'
+import { Package, TrendingUp, Users, LogOut, Settings, Shield, UserCog, X, Check, Mail, Phone, Lock, MessageSquare, Clock, Banknote, HardDrive, CalendarDays } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { updateProfile, getUnreadPostCount, getUnreadCommentNotificationCount } from '../api.js'
 import logoImg from '../assets/HTC_logo.png'
@@ -16,6 +16,7 @@ const SYSTEMS = [
     bgColor: 'bg-blue-50',
     textColor: 'text-blue-600',
     path: '/inventory',
+    subdomain: 'inv',
     isExternal: false,
   },
   {
@@ -43,6 +44,20 @@ const SYSTEMS = [
     subdomain: 'crm',
     port: 8002,
     isExternal: true,
+  },
+  {
+    id: 'worklog',
+    title: '업무일지 캘린더',
+    description: '일일/기간별 업무일지 작성 및 공유',
+    icon: CalendarDays,
+    color: 'from-orange-500 to-orange-600',
+    borderColor: 'border-orange-200 hover:border-orange-400',
+    bgColor: 'bg-orange-50',
+    textColor: 'text-orange-600',
+    path: '/work-log',
+    subdomain: 'cal',
+    isExternal: false,
+    permission: 'can_access_worklog', // 사용자 관리에서 부여
   },
 ]
 
@@ -139,15 +154,16 @@ export default function MainHub() {
   }, [])
 
   const handleSystemClick = (system) => {
-    if (system.isExternal) {
-      const protocol = window.location.protocol
-      const hostname = window.location.hostname
-      // 도메인 환경: 서브도메인 사용, 로컬 환경: 포트 사용
-      if (hostname.includes('hltac.com')) {
-        window.location.href = `${protocol}//${system.subdomain}.hltac.com`
-      } else {
-        window.location.href = `${protocol}//${hostname}:${system.port}`
-      }
+    if (system.permission && !user?.is_admin && !user?.[system.permission]) {
+      alert('권한이 없습니다. 관리자에게 문의하세요.')
+      return
+    }
+    const { protocol, hostname } = window.location
+    // 도메인 환경: 서브도메인 사용, 로컬 환경: 포트(별도 앱) 또는 경로(같은 앱)
+    if (system.subdomain && hostname.includes('hltac.com')) {
+      window.location.href = `${protocol}//${system.subdomain}.hltac.com`
+    } else if (system.isExternal) {
+      window.location.href = `${protocol}//${hostname}:${system.port}`
     } else {
       navigate(system.path)
     }
@@ -200,7 +216,7 @@ export default function MainHub() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-200">
       {/* 헤더 */}
       <header className="bg-white shadow-sm">
-        <div className="max-w-6xl mx-auto px-6 pt-6">
+        <div className="max-w-7xl mx-auto px-6 pt-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="w-[100px] h-[100px] bg-white flex items-center justify-center overflow-hidden p-2">
@@ -311,7 +327,7 @@ export default function MainHub() {
           </div>
         </div>
         {/* 시간 & 환율 정보 */}
-        <div className="max-w-6xl mx-auto px-6 pb-6">
+        <div className="max-w-7xl mx-auto px-6 pb-6">
           <div className="flex gap-4">
           {/* 한국 시간 */}
           <div className="bg-slate-50 rounded-xl px-6 py-4 flex items-center gap-4">
@@ -355,13 +371,13 @@ export default function MainHub() {
       </header>
 
       {/* 메인 컨텐츠 */}
-      <main className="max-w-6xl mx-auto px-6 py-12">
+      <main className="max-w-7xl mx-auto px-6 py-12">
         <div className="mb-10">
           <h2 className="text-xl font-semibold text-slate-700">시스템 선택</h2>
           <p className="text-slate-500 text-sm mt-1">사용할 시스템을 선택하세요</p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-8">
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
           {SYSTEMS.map((system) => (
             <button
               key={system.id}

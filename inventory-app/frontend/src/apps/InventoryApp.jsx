@@ -1,4 +1,5 @@
 import { Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { invPath, goHub } from '../site.js'
 import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Calendar, Package, ChevronDown, ChevronRight,
@@ -23,33 +24,33 @@ import Settings       from '../pages/Settings.jsx'
 import DeliveryHistory from '../pages/DeliveryHistory.jsx'
 
 const NAV = [
-  { to: '/inventory',         icon: LayoutDashboard, label: '재고현황' },
-  { to: '/inventory/stock-detail', icon: ListFilter, label: '재고상세' },
-  { to: '/inventory/calendar', icon: Calendar,        label: '대여캘린더' },
+  { to: invPath(),         icon: LayoutDashboard, label: '재고현황' },
+  { to: invPath('/stock-detail'), icon: ListFilter, label: '재고상세' },
+  { to: invPath('/calendar'), icon: Calendar,        label: '대여캘린더' },
   {
     label: '재고', icon: Package, children: [
-      { to: '/inventory/stock/radio',     label: '라디오' },
-      { to: '/inventory/stock/antenna',   label: '안테나' },
-      { to: '/inventory/stock/accessory', label: '악세사리' },
-      { to: '/inventory/stock/specs',     label: '상세정보' },
+      { to: invPath('/stock/radio'),     label: '라디오' },
+      { to: invPath('/stock/antenna'),   label: '안테나' },
+      { to: invPath('/stock/accessory'), label: '악세사리' },
+      { to: invPath('/stock/specs'),     label: '상세정보' },
     ]
   },
   {
     label: '출고', icon: Truck, children: [
-      { to: '/inventory/out/rental',   label: '대여' },
-      { to: '/inventory/out/delivery', label: '납품' },
+      { to: invPath('/out/rental'),   label: '대여' },
+      { to: invPath('/out/delivery'), label: '납품' },
     ]
   },
   {
     label: '입고', icon: PackagePlus, children: [
-      { to: '/inventory/inbound', end: true, label: '제품 입고' },
-      { to: '/inventory/inbound/summary', label: '입고 요약' },
-      { to: '/inventory/inbound/detail',  label: '입고 상세' },
+      { to: invPath('/inbound'), end: true, label: '제품 입고' },
+      { to: invPath('/inbound/summary'), label: '입고 요약' },
+      { to: invPath('/inbound/detail'),  label: '입고 상세' },
     ]
   },
-  { to: '/inventory/rental-history',   icon: ClipboardList, label: '대여이력' },
-  { to: '/inventory/delivery-history', icon: ClipboardList, label: '납품이력' },
-  { to: '/inventory/settings', icon: Settings2, label: '드롭다운 관리' },
+  { to: invPath('/rental-history'),   icon: ClipboardList, label: '대여이력' },
+  { to: invPath('/delivery-history'), icon: ClipboardList, label: '납품이력' },
+  { to: invPath('/settings'), icon: Settings2, label: '드롭다운 관리' },
 ]
 
 function NavItem({ item, open: sidebarOpen }) {
@@ -76,7 +77,7 @@ function NavItem({ item, open: sidebarOpen }) {
         {sidebarOpen && expanded && (
           <div className="ml-8 mt-0.5 flex flex-col gap-0.5">
             {item.children.map(c => (
-              <NavLink key={c.to} to={c.to} end={c.to === '/inventory/inbound'}
+              <NavLink key={c.to} to={c.to} end={c.to === invPath('/inbound')}
                 className={({ isActive }) =>
                   `px-3 py-1.5 rounded-lg text-xs transition-colors
                   ${isActive ? 'text-accent bg-blue-50 font-medium' : 'text-dim hover:text-text hover:bg-slate-50'}`
@@ -91,7 +92,7 @@ function NavItem({ item, open: sidebarOpen }) {
   }
 
   return (
-    <NavLink to={item.to} end={item.to === '/inventory'}
+    <NavLink to={item.to} end={item.to === invPath()}
       className={({ isActive }) =>
         `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors
         ${isActive ? 'bg-blue-50 text-accent font-medium border border-blue-100' : 'text-dim hover:text-text hover:bg-slate-50'}`
@@ -110,26 +111,6 @@ function Sidebar({ open, setOpen }) {
       {open && <div className="fixed inset-0 bg-black/20 z-20 md:hidden" onClick={() => setOpen(false)}/>}
       <aside onClick={!open ? () => setOpen(true) : undefined}
         className={`fixed top-0 left-0 h-full z-30 flex flex-col bg-white border-r border-slate-200 shadow-sm transition-all duration-300 ${open ? 'w-56' : 'w-14 cursor-pointer'} md:relative`}>
-        <div className="flex items-center gap-3 px-4 py-5 border-b border-slate-100">
-          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
-            <span className="text-white font-bold text-xs">H</span>
-          </div>
-          {open && (
-            <div>
-              <p className="text-text font-semibold text-sm">재고관리</p>
-              <p className="text-dim text-xs">Inventory</p>
-            </div>
-          )}
-        </div>
-
-        <div className="px-2 pt-3">
-          <button onClick={() => navigate('/')}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors border border-slate-200">
-            <Home size={16} className="flex-shrink-0"/>
-            {open && <span>메인으로</span>}
-          </button>
-        </div>
-
         <nav className="flex-1 py-4 flex flex-col gap-0.5 px-2 overflow-y-auto">
           {NAV.map((item, i) => <NavItem key={i} item={item} open={open}/>)}
         </nav>
@@ -158,12 +139,28 @@ export default function InventoryApp() {
   }, [])
 
   return (
-    <div className="flex h-screen overflow-hidden bg-bg">
-      <Sidebar open={sidebarOpen} setOpen={setSidebarOpen}/>
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-end">
-          <AlertBell />
-        </header>
+    <div className="flex flex-col h-screen overflow-hidden bg-bg">
+      {/* 헤더: Sales Pipeline과 같은 배치 (메인으로 + 메인허브 카드 마크) */}
+      <header className="px-6 py-4 flex items-center justify-between bg-white border-b border-slate-200">
+        <div className="flex items-center gap-4">
+          <button onClick={goHub} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-800 hover:bg-slate-50 transition-colors">
+            <Home size={16}/>
+            메인으로
+          </button>
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
+              <Package size={24} className="text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-slate-800">재고관리</h1>
+              <p className="text-sm text-slate-500">장비 재고, 입출고, 대여/납품 관리</p>
+            </div>
+          </div>
+        </div>
+        <AlertBell />
+      </header>
+      <div className="flex flex-1 overflow-hidden">
+        <Sidebar open={sidebarOpen} setOpen={setSidebarOpen}/>
         <main className="flex-1 overflow-auto bg-bg">
           <Routes>
             <Route path="/"                    element={<Dashboard/>}/>

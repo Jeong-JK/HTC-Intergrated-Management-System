@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { TitleInput, useMonthWheel, dragStyle } from '../components/MonthNav.jsx'
 import { getCalendar } from '../api.js'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Modal, Btn } from '../components/Common.jsx'
@@ -24,10 +25,13 @@ export default function CalendarPage() {
   const [rentals, setRentals] = useState([])
   const [loading, setLoading] = useState(false)
   const [selectedRental, setSelectedRental] = useState(null)
-  const [viewMode, setViewMode] = useState('month') // 'month' or 'week'
   const [selectedUndecidedCompany, setSelectedUndecidedCompany] = useState(null) // 미정 업체 상세보기
 
   useScrollRestore('calendar', [rentals])
+
+  // 끝까지 스크롤한 뒤 더 굴리면 이전/다음 달로
+  const calendarRef = useRef(null)
+  const drag = useMonthWheel(calendarRef, calendarRef, dir => setCurrent(c => c.add(dir, 'month')))
 
   useEffect(() => {
     setLoading(true)
@@ -240,21 +244,6 @@ export default function CalendarPage() {
     weeks.push(calendarDays.slice(i, i + 7))
   }
 
-  // 주간 뷰용 날짜 계산
-  const getWeekDays = () => {
-    const startOfWeek = current.day(0) // 일요일
-    const days = []
-    for (let i = 0; i < 7; i++) {
-      days.push({
-        date: startOfWeek.add(i, 'day'),
-        isCurrentMonth: true
-      })
-    }
-    return days
-  }
-
-  const weekDays = getWeekDays()
-
   const today = dayjs()
 
   // 대여 상세 정보 모달 열기
@@ -268,63 +257,34 @@ export default function CalendarPage() {
         <div>
           <h1 className="text-2xl font-bold text-text">대여 캘린더</h1>
           <div className="flex items-center gap-3 mt-2">
-            <span className="bg-blue-600 text-white text-lg font-bold px-3 py-1 rounded">
-              {viewMode === 'month'
-                ? current.format('YYYY년 MM월')
-                : `${weekDays[0].date.format('YYYY.MM.DD')} ~ ${weekDays[6].date.format('MM.DD')}`
-              }
-            </span>
+            <TitleInput type="month" value={current.format('YYYY-MM')} label={current.format('YYYY년 M월')}
+              onChange={d => setCurrent(d)} hoverClass="hover:text-blue-600"
+              className="text-lg font-bold text-slate-800 min-w-[130px] text-center" />
+            {/* 네비게이션: 년월 바로 옆 */}
+            <div className="flex gap-2 items-center">
+              <button
+                onClick={() => setCurrent(c => c.subtract(1, 'month'))}
+                className="p-2 border border-slate-200 bg-white rounded-lg hover:bg-slate-50 text-slate-600"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <button
+                onClick={() => setCurrent(dayjs())}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border border-border text-dim bg-white hover:bg-slate-50 hover:text-text"
+              >
+                이번 달
+              </button>
+              <button
+                onClick={() => setCurrent(c => c.add(1, 'month'))}
+                className="p-2 border border-slate-200 bg-white rounded-lg hover:bg-slate-50 text-slate-600"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
             <span className="text-slate-600 text-sm">
               {decidedCompanyGroups.length}개 업체 · {groupedRentals.length - undecidedRentals.length}개 기간
               {undecidedRentals.length > 0 && <span className="text-orange-500 font-medium ml-1">+ 미정 {undecidedRentals.length}건</span>}
             </span>
-          </div>
-        </div>
-        <div className="flex gap-3 items-center">
-          {/* 뷰 모드 전환 */}
-          <div className="flex gap-1 bg-slate-100 rounded-lg p-1">
-            <button
-              onClick={() => setViewMode('month')}
-              className={`px-3 py-1.5 rounded text-sm font-medium transition-all ${
-                viewMode === 'month'
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              월간
-            </button>
-            <button
-              onClick={() => setViewMode('week')}
-              className={`px-3 py-1.5 rounded text-sm font-medium transition-all ${
-                viewMode === 'week'
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              주간
-            </button>
-          </div>
-
-          {/* 네비게이션 */}
-          <div className="flex gap-2 items-center">
-            <button
-              onClick={() => setCurrent(c => viewMode === 'month' ? c.subtract(1, 'month') : c.subtract(1, 'week'))}
-              className="p-2 rounded border border-border text-dim hover:text-text transition-colors"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <button
-              onClick={() => setCurrent(dayjs())}
-              className="px-3 py-1.5 rounded border border-border text-dim hover:text-text text-sm transition-colors"
-            >
-              오늘
-            </button>
-            <button
-              onClick={() => setCurrent(c => viewMode === 'month' ? c.add(1, 'month') : c.add(1, 'week'))}
-              className="p-2 rounded border border-border text-dim hover:text-text transition-colors"
-            >
-              <ChevronRight size={16} />
-            </button>
           </div>
         </div>
       </div>
@@ -381,7 +341,7 @@ export default function CalendarPage() {
       )}
 
       {/* 달력 */}
-      <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+      <div ref={calendarRef} style={dragStyle(drag)} className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
         {/* 요일 헤더 */}
         <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-200">
           {WEEKDAYS.map((day, i) => (
@@ -401,7 +361,7 @@ export default function CalendarPage() {
           <div className="p-8 text-center text-dim">로딩 중...</div>
         )}
 
-        {!loading && viewMode === 'month' && (
+        {!loading && (
           <div>
             {weeks.map((week, weekIdx) => (
               <div key={weekIdx} className="grid grid-cols-7 border-b border-slate-100 last:border-0">
@@ -478,91 +438,6 @@ export default function CalendarPage() {
           </div>
         )}
 
-        {/* 주간 뷰 */}
-        {!loading && viewMode === 'week' && (
-          <div className="grid grid-cols-7">
-            {weekDays.map((day, dayIdx) => {
-              const dayRentals = getRentalsForDate(day.date)
-              const isToday = day.date.isSame(today, 'day')
-              const isWeekend = dayIdx === 0 || dayIdx === 6
-
-              return (
-                <div
-                  key={day.date.format('YYYY-MM-DD')}
-                  className={`min-h-[400px] p-3 border-r border-slate-100 last:border-r-0 ${
-                    isToday ? 'bg-blue-50/30' : ''
-                  } transition-colors`}
-                >
-                  <div
-                    className={`text-base font-semibold mb-3 pb-2 border-b border-slate-200 ${
-                      isToday
-                        ? 'text-blue-600'
-                        : isWeekend && dayIdx === 0
-                        ? 'text-red-500'
-                        : isWeekend && dayIdx === 6
-                        ? 'text-blue-500'
-                        : 'text-slate-700'
-                    }`}
-                  >
-                    {day.date.date()}일
-                    {isToday && <span className="ml-2 text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full">오늘</span>}
-                  </div>
-
-                  {/* 대여 목록 (주간 뷰에서는 모든 대여 표시) */}
-                  <div className="space-y-2">
-                    {dayRentals.map((rental, idx) => {
-                      const { isStart, isEnd } = getRentalPosition(rental, day.date)
-
-                      return (
-                        <div
-                          key={idx}
-                          className="rounded-lg p-2.5 cursor-pointer hover:opacity-90 transition-all shadow-sm border-l-4"
-                          style={{
-                            backgroundColor: `${colorMap[rental.borrower]}15`,
-                            borderLeftColor: colorMap[rental.borrower]
-                          }}
-                          onClick={() => handleRentalClick(rental)}
-                        >
-                          <div className="flex items-start justify-between gap-2 mb-1.5">
-                            <div className="font-semibold text-sm text-slate-800 flex-1">
-                              {rental.borrower}
-                            </div>
-                            {isStart && (
-                              <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700 font-medium">
-                                시작
-                              </span>
-                            )}
-                            {isEnd && (
-                              <span className="text-xs px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 font-medium">
-                                종료
-                              </span>
-                            )}
-                          </div>
-                          {rental.contact_name && (
-                            <div className="text-xs text-slate-600 mb-1">
-                              담당: {rental.contact_name}
-                            </div>
-                          )}
-                          <div className="text-xs text-slate-500">
-                            품목 {rental.items.length}개
-                          </div>
-                          <div className="text-xs text-slate-400 mono mt-1">
-                            {rental.rent_date} ~ {rental.expected_return}
-                          </div>
-                        </div>
-                      )
-                    })}
-                    {dayRentals.length === 0 && (
-                      <div className="text-xs text-slate-400 text-center py-8">
-                        대여 없음
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
       </div>
 
       {/* 대여 상세정보 모달 */}

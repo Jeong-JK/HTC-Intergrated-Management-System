@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { invPath } from '../../site.js'
 import { useNavigate } from 'react-router-dom'
 import { getInbound, updateInbound, bulkUpdateExchangeRate, deleteInbound } from '../../api.js'
 import { PageHeader, Table, Spinner, Empty, Btn, Modal, Field, inputCls, fmt, NoteText } from '../../components/Common.jsx'
@@ -199,7 +200,7 @@ export default function InboundDetail() {
     }))
 
     // 납품 등록 페이지로 이동하면서 데이터 전달
-    navigate('/inventory/out/delivery', { state: { prefilledItems: deliveryItems } })
+    navigate(invPath('/out/delivery'), { state: { prefilledItems: deliveryItems } })
   }
 
   return (
