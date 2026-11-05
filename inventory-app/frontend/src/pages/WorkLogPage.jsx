@@ -331,7 +331,9 @@ function MissingBanner({ day, users }) {
       <UserX size={16} className={`mt-0.5 flex-shrink-0 ${users.length ? 'text-red-500' : 'text-emerald-500'}`} />
       <span className="font-semibold text-slate-700 whitespace-nowrap">{dayLabel(day)} 미작성</span>
       {users.length
-        ? <span className="text-slate-600">{users.map(userLabel).join(', ')} <span className="text-slate-400">({users.length}명)</span></span>
+        ? <span className="text-slate-600">{users.map((u, i) => (
+            <span key={u.id}>{i > 0 && ', '}<b className="font-semibold text-slate-800">{u.name}</b>{u.position && ` ${u.position}`}</span>
+          ))} <span className="text-slate-400">({users.length}명)</span></span>
         : <span className="text-emerald-600">모두 작성했습니다</span>}
     </div>
   )
