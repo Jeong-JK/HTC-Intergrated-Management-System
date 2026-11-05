@@ -1,13 +1,13 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
-import { Home, ShieldAlert, CalendarDays, ChevronLeft, ChevronRight, Plus, X, UserX } from 'lucide-react'
+import { Home, ShieldAlert, CalendarDays, ChevronLeft, ChevronRight, Plus, X, UserX, Search } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { Modal, Btn, Field, inputCls } from '../components/Common.jsx'
 import DatePicker from '../components/DatePicker.jsx'
 import { goHub } from '../site.js'
 import { TitleInput, useMonthWheel, dragStyle } from '../components/MonthNav.jsx'
-import { getWorkLogs, getWorkLogUsers, getWorkLogMissing, createWorkLog, updateWorkLog, deleteWorkLog } from '../api.js'
+import { getWorkLogs, getWorkLogUsers, getWorkLogMissing, searchWorkLogs, createWorkLog, updateWorkLog, deleteWorkLog } from '../api.js'
 
 const DATE_FMT = 'YYYY-MM-DD'
 const MONTH_WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
@@ -63,6 +63,8 @@ export default function WorkLogPage() {
   const [loading, setLoading] = useState(false)
   const [editing, setEditing] = useState(null) // null | { log } | { date }
   const [reloadKey, setReloadKey] = useState(0)
+  const [searchText, setSearchText] = useState('') // 입력 중인 검색어
+  const [search, setSearch] = useState(null) // null | { q, rows, truncated, loading }
 
   useEffect(() => { document.title = '업무일지 캘린더 - HTC' }, [])
 
@@ -102,6 +104,17 @@ export default function WorkLogPage() {
     if (blocked) return
     getWorkLogMissing(missingKey).then(r => setMissing(r.data.data)).catch(() => setMissing([]))
   }, [missingKey, reloadKey, blocked])
+
+  const runSearch = (e) => {
+    e.preventDefault()
+    const q = searchText.trim()
+    if (!q) { setSearch(null); return }
+    setSearch({ q, rows: [], truncated: false, loading: true })
+    searchWorkLogs(q)
+      .then(r => setSearch({ q, rows: r.data.data, truncated: r.data.truncated, loading: false }))
+      .catch(err => { alert(err.response?.data?.detail || '검색하지 못했습니다'); setSearch(null) })
+  }
+  const clearSearch = () => { setSearch(null); setSearchText('') }
 
   const openDay = (date) => {
     setDay(dayjs(date).startOf('day'))
@@ -234,6 +247,17 @@ export default function WorkLogPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <form onSubmit={runSearch} className="relative">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input value={searchText} onChange={e => setSearchText(e.target.value)}
+                placeholder={canManage ? '업무 내용 검색 (전체 직원)' : '내 업무 내용 검색'} maxLength={50}
+                className="border border-slate-200 rounded-lg pl-8 pr-7 py-1.5 text-sm bg-white w-56 focus:outline-none focus:border-orange-400" />
+              {searchText && (
+                <button type="button" onClick={clearSearch} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" title="검색 지우기">
+                  <X size={14} />
+                </button>
+              )}
+            </form>
             {personal && canManage && (
               <select
                 value={targetUserId || ''}
@@ -260,6 +284,10 @@ export default function WorkLogPage() {
 
         <MissingBanner day={missingDay} users={missing} />
 
+        {search ? (
+          <SearchView search={search} onClose={clearSearch}
+            onPick={row => { clearSearch(); openAuthorWeek(row.start_date, row.user_id) }} />
+        ) : (<>
         {view === 'month' && (
           <MonthView month={month} range={range} byDay={byDay} today={today}
             onDayClick={openNew} onOpenWeek={openAuthorWeek} onMore={canManage ? openDay : null}
@@ -275,6 +303,7 @@ export default function WorkLogPage() {
         {view === 'list' && (
           <ListView logs={logs} onLogClick={log => setEditing({ log })} />
         )}
+        </>)}
       </div>
 
       {editing && (
@@ -475,6 +504,59 @@ function ListView({ logs, onLogClick }) {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// 검색어 강조 (대소문자 무시)
+function Highlight({ text, q }) {
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const parts = text.split(new RegExp('(' + escaped + ')', 'gi'))
+  return parts.map((p, i) => i % 2 ? <mark key={i} className="bg-yellow-200 text-slate-900 rounded px-0.5">{p}</mark> : p)
+}
+
+// 검색 결과: 날짜별 묶음 → 작성자 · 검색어가 들어간 줄
+function SearchView({ search, onClose, onPick }) {
+  const { q, rows, truncated, loading } = search
+  const groups = []
+  for (const row of rows) {
+    const key = `${row.start_date}~${row.end_date}`
+    if (groups[groups.length - 1]?.key !== key) groups.push({ key, row, items: [] })
+    groups[groups.length - 1].items.push(row)
+  }
+  const fmt = d => `${dayjs(d).format('YYYY.MM.DD')} (${MONTH_WEEKDAYS[dayjs(d).day()]})`
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+        <div className="text-sm text-slate-700">
+          <span className="font-semibold text-orange-600">"{q}"</span> 검색 결과
+          {!loading && <span className="text-slate-500"> · {rows.length}줄{truncated && ' (최근 것만 표시, 검색어를 더 구체적으로)'}</span>}
+        </div>
+        <Btn onClick={onClose}><X size={14} /> 달력으로</Btn>
+      </div>
+      {loading ? (
+        <div className="py-16 flex justify-center"><div className="w-5 h-5 border-2 border-slate-200 border-t-orange-500 rounded-full animate-spin" /></div>
+      ) : !rows.length ? (
+        <div className="py-16 text-center text-sm text-slate-400">검색 결과가 없습니다</div>
+      ) : groups.map(g => (
+        <div key={g.key}>
+          <div className="px-4 py-2 bg-slate-100 border-y border-slate-200 text-sm font-bold text-slate-800">
+            {fmt(g.row.start_date)}
+            {!!g.row.is_multi_day && <span className="font-normal text-orange-600"> ~ {fmt(g.row.end_date)}</span>}
+          </div>
+          {g.items.map((row, i) => (
+            <div key={row.id} onClick={() => onPick(row)} title="이 주 업무일지로 이동"
+              className="flex gap-4 px-4 py-2 border-b border-slate-100 last:border-b-0 cursor-pointer hover:bg-orange-50">
+              <div className="w-32 flex-shrink-0 text-sm font-medium text-slate-700">
+                {(i === 0 || g.items[i - 1].user_id !== row.user_id) && userLabel(row)}
+              </div>
+              <div className="flex-1 text-sm text-slate-700 whitespace-pre-wrap break-words">
+                <Highlight text={row.content} q={q} />
+              </div>
+            </div>
+          ))}
+        </div>
+      ))}
     </div>
   )
 }

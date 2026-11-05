@@ -9,6 +9,7 @@ from routers.auth import require_perm
 router = APIRouter(tags=["work_logs"])
 
 MAX_QUERY_DAYS = 62  # 월간 달력 6주(42일) + 여유
+SEARCH_LIMIT = 300  # 검색 결과 최대 줄 수
 HIDDEN_LOGIN_ID = "admin"  # 이 계정(로그인 아이디)의 존재/업무일지는 본인 외 아무에게도 안 보임
 
 # 권한 (사용자 관리에서 부여, 관리자는 전부 보유)
@@ -101,6 +102,34 @@ def list_missing(request: Request, day: date):
             (HIDDEN_LOGIN_ID, day, day)
         )
         return {"data": cur.fetchall()}
+
+
+@router.get("/work-logs/search")
+def search_work_logs(request: Request, q: str):
+    """검색어가 들어간 업무 줄만 (같은 일지의 다른 줄은 제외). 최신 날짜순.
+    관리자/업무일지관리자는 전체, 그 외엔 본인 것만"""
+    user = require_perm(request, "can_access_worklog")
+    q = q.strip()
+    if not q or len(q) > 50:
+        raise HTTPException(status_code=400, detail="검색어는 1~50자로 입력하세요")
+    like = "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+    sql = """SELECT i.id, i.content, i.item_order, m.id AS master_id, m.user_id,
+                    m.start_date, m.end_date, m.is_multi_day,
+                    u.name AS user_name, u.position AS user_position
+             FROM work_log_items i
+             JOIN work_log_masters m ON i.master_id = m.id
+             JOIN users u ON m.user_id = u.id
+             WHERE i.content LIKE %s AND (u.user_id <> %s OR m.user_id = %s)"""
+    params = [like, HIDDEN_LOGIN_ID, user["id"]]
+    if not has_perm(user, "can_manage_worklog"):
+        sql += " AND m.user_id = %s"
+        params.append(user["id"])
+    sql += " ORDER BY m.start_date DESC, m.end_date DESC, u.name, m.id, i.item_order LIMIT %s"
+    params.append(SEARCH_LIMIT + 1)
+    with db_cursor() as cur:
+        cur.execute(sql, params)
+        rows = cur.fetchall()
+    return {"data": rows[:SEARCH_LIMIT], "truncated": len(rows) > SEARCH_LIMIT}
 
 
 @router.get("/work-logs")

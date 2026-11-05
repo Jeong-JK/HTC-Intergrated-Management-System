@@ -112,6 +112,7 @@ export const deleteReadNotifications         = ()   => api.delete('/notification
 export const getWorkLogs     = (params) => api.get('/work-logs', { params })
 export const getWorkLogUsers = ()       => api.get('/work-logs/users')
 export const getWorkLogMissing = (day)  => api.get('/work-logs/missing', { params: { day } })
+export const searchWorkLogs  = (q)      => api.get('/work-logs/search', { params: { q } })
 export const createWorkLog   = (data)   => api.post('/work-logs', data)
 export const updateWorkLog   = (id, d)  => api.put(`/work-logs/${id}`, d)
 export const deleteWorkLog   = (id)     => api.delete(`/work-logs/${id}`)
