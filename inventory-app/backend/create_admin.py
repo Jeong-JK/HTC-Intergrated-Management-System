@@ -1,10 +1,7 @@
 """Create initial admin user"""
-import hashlib
 import pymysql
 from config import DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
-
-def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
+from routers.auth import hash_password
 
 def create_admin():
     conn = pymysql.connect(
@@ -21,7 +18,7 @@ def create_admin():
                 CREATE TABLE IF NOT EXISTS users (
                     id            INT AUTO_INCREMENT PRIMARY KEY,
                     user_id       VARCHAR(50)    NOT NULL UNIQUE,
-                    password_hash VARCHAR(64)    NOT NULL,
+                    password_hash VARCHAR(255)   NOT NULL,
                     name          VARCHAR(100)   NOT NULL,
                     is_admin      BOOLEAN        DEFAULT FALSE,
                     created_at    DATETIME       DEFAULT NOW()

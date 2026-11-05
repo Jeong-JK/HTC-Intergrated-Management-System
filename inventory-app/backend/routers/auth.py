@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException, Response, Request
 from pydantic import BaseModel
 from typing import Optional
 import hashlib
+import hmac
 import secrets
 import json
 from database import db_cursor
@@ -12,13 +13,24 @@ SESSION_TIMEOUT_HOURS = 1
 
 router = APIRouter(tags=["auth"])
 
+PBKDF2_ITERATIONS = 200_000
+
 def hash_password(password: str) -> str:
-    """SHA-256 hash for password"""
-    return hashlib.sha256(password.encode()).hexdigest()
+    """PBKDF2-SHA256 + 사용자별 랜덤 salt → 'pbkdf2$반복수$salt$hash'"""
+    salt = secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, PBKDF2_ITERATIONS)
+    return f"pbkdf2${PBKDF2_ITERATIONS}${salt.hex()}${digest.hex()}"
 
 def verify_password(password: str, hashed: str) -> bool:
-    """Verify password against hash"""
-    return hash_password(password) == hashed
+    if hashed.startswith("pbkdf2$"):
+        _, iterations, salt, digest = hashed.split("$")
+        calc = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), int(iterations))
+        return hmac.compare_digest(calc.hex(), digest)
+    # 예전 방식(salt 없는 SHA-256) — 로그인 성공 시 login()에서 새 방식으로 교체
+    return hmac.compare_digest(hashlib.sha256(password.encode()).hexdigest(), hashed)
+
+def needs_rehash(hashed: str) -> bool:
+    return not hashed.startswith(f"pbkdf2${PBKDF2_ITERATIONS}$")
 
 # ========== DB Session Functions ==========
 def get_session(session_token: str):
@@ -147,6 +159,11 @@ def login(req: LoginRequest, response: Response):
 
     if not user or not verify_password(req.password, user['password_hash']):
         raise HTTPException(status_code=401, detail="아이디 또는 비밀번호가 틀렸습니다")
+
+    # 예전 해시면 맞는 비밀번호를 받은 지금 새 방식으로 교체 (사용자는 비밀번호 재설정 불필요)
+    if needs_rehash(user['password_hash']):
+        with db_cursor() as cur:
+            cur.execute("UPDATE users SET password_hash = %s WHERE id = %s", (hash_password(req.password), user['id']))
 
     # 세션에 저장할 사용자 정보 (권한 포함)
     session_data = {

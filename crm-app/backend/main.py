@@ -23,7 +23,6 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         # 인증 체크
         session_token = request.cookies.get("session_token")
-        print(f"[DEBUG] Path: {request.url.path}, Cookie: {session_token[:20] if session_token else 'None'}...")
 
         if session_token:
             # inventory-app의 인증 API 호출
@@ -34,21 +33,18 @@ class AuthMiddleware(BaseHTTPMiddleware):
                         cookies={"session_token": session_token},
                         timeout=2.0
                     )
-                    print(f"[DEBUG] Auth response: {response.status_code}")
                     if response.status_code == 200:
                         # 인증 성공 - user 정보 저장
                         user_data = response.json()
                         request.state.user = user_data.get("user", {})
                         return await call_next(request)
             except Exception as e:
-                print(f"[DEBUG] Auth error: {e}")
-                pass
+                print(f"인증 서비스 연결 실패: {e}")
 
         # 인증 실패 처리
         # API 요청은 401 에러 반환
         if request.url.path.startswith("/api/"):
             from fastapi.responses import JSONResponse
-            print(f"[DEBUG] Returning 401 for {request.url.path}")
             return JSONResponse(
                 status_code=401,
                 content={"detail": "로그인이 필요합니다"}
