@@ -3,20 +3,9 @@ from fastapi import APIRouter, Query, Request, HTTPException
 from typing import Optional
 from models.schemas import DeliveryCreate, DeliveryGroupUpdate, DeliveryConfirm
 from database import db_cursor
-from routers.auth import get_session
+from routers.auth import require_perm
 
 router = APIRouter(prefix="/deliveries", tags=["deliveries"])
-
-
-def check_delete_permission(request: Request):
-    """삭제 권한 확인 (관리자 또는 can_delete 권한 필요)"""
-    session_token = request.cookies.get("session_token")
-    user = get_session(session_token)
-    if not user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
-
-    if not user.get('is_admin') and not user.get('can_delete'):
-        raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자에게 문의하세요.")
 
 
 @router.get("")
@@ -151,7 +140,7 @@ def confirm_delivery(delivery_id: int, body: DeliveryConfirm):
 
 @router.delete("/{delivery_id}")
 def delete_delivery(delivery_id: int, request: Request):
-    check_delete_permission(request)
+    require_perm(request, "can_delete")
     with db_cursor() as cur:
         # 삭제 전 납품 정보 조회
         cur.execute("SELECT item_id, status FROM delivery_history WHERE id=%s", (delivery_id,))

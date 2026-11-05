@@ -1,6 +1,7 @@
 """HTC Inventory — Admin Drive Router"""
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File
 from fastapi.responses import FileResponse
+from routers.auth import require_perm
 from typing import List
 import os
 import shutil
@@ -14,19 +15,6 @@ MAX_STORAGE_BYTES = 1 * 1024 * 1024 * 1024  # 1GB
 
 # 폴더 생성
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-def get_session_from_request(request: Request):
-    """요청에서 세션 가져오기"""
-    from routers.auth import get_session
-    session_token = request.cookies.get("session_token")
-    return get_session(session_token)
-
-def require_admin(request: Request):
-    """Admin 권한 체크"""
-    session = get_session_from_request(request)
-    if not session or not session.get("is_admin"):
-        raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
-    return session
 
 def get_folder_size(folder_path: str) -> int:
     """폴더 전체 크기 계산"""
@@ -50,7 +38,7 @@ def format_size(size_bytes: int) -> str:
 @router.get("/files")
 async def list_files(request: Request):
     """파일 목록 조회"""
-    require_admin(request)
+    require_perm(request, "is_admin")
 
     files = []
     if os.path.exists(UPLOAD_DIR):
@@ -84,7 +72,7 @@ async def list_files(request: Request):
 @router.post("/upload")
 async def upload_file(request: Request, file: UploadFile = File(...)):
     """파일 업로드"""
-    require_admin(request)
+    require_perm(request, "is_admin")
 
     # 용량 체크
     used = get_folder_size(UPLOAD_DIR)
@@ -120,7 +108,7 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
 @router.get("/download/{filename}")
 async def download_file(request: Request, filename: str):
     """파일 다운로드"""
-    require_admin(request)
+    require_perm(request, "is_admin")
 
     filepath = os.path.join(UPLOAD_DIR, filename)
 
@@ -140,7 +128,7 @@ async def download_file(request: Request, filename: str):
 @router.delete("/delete/{filename}")
 async def delete_file(request: Request, filename: str):
     """파일 삭제"""
-    require_admin(request)
+    require_perm(request, "is_admin")
 
     filepath = os.path.join(UPLOAD_DIR, filename)
 
@@ -157,7 +145,7 @@ async def delete_file(request: Request, filename: str):
 @router.put("/rename/{filename}")
 async def rename_file(request: Request, filename: str):
     """파일 이름 변경"""
-    require_admin(request)
+    require_perm(request, "is_admin")
 
     body = await request.json()
     new_name = body.get("new_name", "").strip()

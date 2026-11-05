@@ -4,7 +4,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from database import db_cursor
-from routers.auth import get_session
+from routers.auth import require_perm
 
 router = APIRouter(tags=["work_logs"])
 
@@ -29,15 +29,6 @@ class WorkLogSave(BaseModel):
 
 def has_perm(user, field):
     return bool(user.get("is_admin") or user.get(field))
-
-
-def require_user(request: Request):
-    user = get_session(request.cookies.get("session_token"))
-    if not user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
-    if not has_perm(user, "can_access_worklog"):
-        raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자에게 문의하세요.")
-    return user
 
 
 def resolve_owner(cur, user, requested_id):
@@ -87,7 +78,7 @@ def insert_items(cur, master_id, items):
 @router.get("/work-logs/users")
 def list_users(request: Request):
     """직원 목록 (관리자/업무일지관리자)"""
-    user = require_user(request)
+    user = require_perm(request, "can_access_worklog")
     if not has_perm(user, "can_manage_worklog"):
         raise HTTPException(status_code=403, detail="권한이 없습니다")
     with db_cursor() as cur:
@@ -99,7 +90,7 @@ def list_users(request: Request):
 @router.get("/work-logs/missing")
 def list_missing(request: Request, day: date):
     """해당 날짜 미작성자 (업무일지 작성 권한 보유자 기준). 이름/직급만이라 모두에게 공개"""
-    require_user(request)
+    require_perm(request, "can_access_worklog")
     with db_cursor() as cur:
         cur.execute(
             """SELECT u.id, u.name, u.position FROM users u
@@ -116,7 +107,7 @@ def list_missing(request: Request, day: date):
 def list_work_logs(request: Request, start: date, end: date, user_id: Optional[int] = None):
     """start~end와 겹치는 업무일지 (월간/주간 공용).
     작성 여부(작성자)는 모두에게 보이고, 내용(items)은 본인 것 또는 관리자/업무일지관리자만"""
-    user = require_user(request)
+    user = require_perm(request, "can_access_worklog")
     if end < start or (end - start).days > MAX_QUERY_DAYS:
         raise HTTPException(status_code=400, detail="조회 기간이 올바르지 않습니다")
     can_view_all = has_perm(user, "can_manage_worklog")
@@ -163,7 +154,7 @@ def list_work_logs(request: Request, start: date, end: date, user_id: Optional[i
 @router.post("/work-logs")
 def create_work_log(data: WorkLogSave, request: Request):
     """작성 — 기간 지정 시 전체 기간에 같은 항목 적용 (마스터 1건으로 묶음)"""
-    user = require_user(request)
+    user = require_perm(request, "can_access_worklog")
     if not has_perm(user, "can_write_worklog"):
         raise HTTPException(status_code=403, detail="업무일지 작성 권한이 없습니다")
     start, end, items = clean(data)
@@ -181,7 +172,7 @@ def create_work_log(data: WorkLogSave, request: Request):
 @router.put("/work-logs/{master_id}")
 def update_work_log(master_id: int, data: WorkLogSave, request: Request):
     """수정 — 항목은 통째로 교체"""
-    user = require_user(request)
+    user = require_perm(request, "can_access_worklog")
     start, end, items = clean(data)
     with db_cursor() as cur:
         current_owner = check_access(cur, user, master_id, "can_edit_worklog")
@@ -197,7 +188,7 @@ def update_work_log(master_id: int, data: WorkLogSave, request: Request):
 
 @router.delete("/work-logs/{master_id}")
 def delete_work_log(master_id: int, request: Request):
-    user = require_user(request)
+    user = require_perm(request, "can_access_worklog")
     with db_cursor() as cur:
         check_access(cur, user, master_id, "can_delete_worklog")
         cur.execute("DELETE FROM work_log_masters WHERE id = %s", (master_id,))

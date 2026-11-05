@@ -4,20 +4,9 @@ from typing import Optional
 from datetime import date
 from models.schemas import RentalCreate, RentalReturn, RentalExtend, RentalHeaderCreate, RentalGroupUpdate, RentalItemUpdate
 from database import db_cursor
-from routers.auth import get_session
+from routers.auth import require_perm
 
 router = APIRouter(prefix="/rentals", tags=["rentals"])
-
-
-def check_delete_permission(request: Request):
-    """삭제 권한 확인 (관리자 또는 can_delete 권한 필요)"""
-    session_token = request.cookies.get("session_token")
-    user = get_session(session_token)
-    if not user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
-
-    if not user.get('is_admin') and not user.get('can_delete'):
-        raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자에게 문의하세요.")
 
 
 @router.get("")
@@ -394,7 +383,7 @@ def update_rental_item(rental_id: int, body: RentalItemUpdate):
 
 @router.delete("/{rental_id}")
 def delete_rental(rental_id: int, request: Request):
-    check_delete_permission(request)
+    require_perm(request, "can_delete")
     with db_cursor() as cur:
         # 삭제 전 정보 조회
         cur.execute("SELECT item_id, item_name, quantity, returned_at FROM rental_history WHERE id=%s", (rental_id,))
@@ -435,7 +424,7 @@ def delete_rental_group(
     contact_name: Optional[str] = Query(None)
 ):
     """업체별(그룹별) 전체 삭제 - 같은 날짜, 업체, 담당자의 모든 대여 이력 삭제"""
-    check_delete_permission(request)
+    require_perm(request, "can_delete")
     with db_cursor() as cur:
         # 삭제할 대여 이력 조회
         sql = "SELECT * FROM rental_history WHERE rent_date=%s AND borrower=%s"

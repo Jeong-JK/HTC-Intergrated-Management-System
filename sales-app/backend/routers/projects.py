@@ -1,5 +1,6 @@
 """HTC Sales Pipeline — Projects (프로젝트 관리) API"""
 from fastapi import APIRouter, HTTPException, Request, Query, BackgroundTasks
+from permissions import require_perm
 from typing import List, Optional
 from pydantic import BaseModel, Field
 from datetime import date
@@ -11,23 +12,6 @@ logger = get_logger(__name__)
 
 router = APIRouter(tags=["Projects"])
 
-
-def check_edit_permission(request: Request):
-    """프로젝트 수정 권한 확인"""
-    user = getattr(request.state, 'user', None)
-    if not user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
-    if not user.get('is_admin') and not user.get('can_edit_project'):
-        raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자에게 문의하세요.")
-
-
-def check_delete_permission(request: Request):
-    """프로젝트 삭제 권한 확인"""
-    user = getattr(request.state, 'user', None)
-    if not user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
-    if not user.get('is_admin') and not user.get('can_delete_project'):
-        raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자에게 문의하세요.")
 
 # ============ Pydantic Models ============
 
@@ -254,7 +238,7 @@ def create_project(project: ProjectCreate):
 @router.put("/projects/{project_id}")
 def update_project(project_id: int, project: ProjectUpdate, request: Request, background_tasks: BackgroundTasks):
     """프로젝트 업데이트"""
-    check_edit_permission(request)
+    require_perm(request, "can_edit_project")
     with db_cursor() as cur:
         # 존재 확인 및 현재 데이터 조회
         cur.execute("SELECT * FROM projects WHERE id = %s", (project_id,))
@@ -353,7 +337,7 @@ def update_project(project_id: int, project: ProjectUpdate, request: Request, ba
 @router.delete("/projects/{project_id}")
 def delete_project(project_id: int, request: Request):
     """프로젝트 삭제"""
-    check_delete_permission(request)
+    require_perm(request, "can_delete_project")
     with db_cursor() as cur:
         cur.execute("DELETE FROM projects WHERE id = %s", (project_id,))
         if cur.rowcount == 0:

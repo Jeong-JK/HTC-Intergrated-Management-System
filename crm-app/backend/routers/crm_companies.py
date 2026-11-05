@@ -1,37 +1,11 @@
 """HTC CRM — Companies Router (Sales DB)"""
 from fastapi import APIRouter, HTTPException, Query, Request
+from permissions import require_perm
 from typing import Optional
 from pydantic import BaseModel
 from database import sales_db_cursor
 
 router = APIRouter(prefix="/crm/companies", tags=["crm-companies"])
-
-
-def check_add_permission(request: Request):
-    """업체 추가 권한 확인"""
-    user = getattr(request.state, 'user', None)
-    if not user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
-    if not user.get('is_admin') and not user.get('can_add_company'):
-        raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자에게 문의하세요.")
-
-
-def check_edit_permission(request: Request):
-    """업체 수정 권한 확인"""
-    user = getattr(request.state, 'user', None)
-    if not user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
-    if not user.get('is_admin') and not user.get('can_edit_company'):
-        raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자에게 문의하세요.")
-
-
-def check_delete_permission(request: Request):
-    """업체 삭제 권한 확인"""
-    user = getattr(request.state, 'user', None)
-    if not user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
-    if not user.get('is_admin') and not user.get('can_delete_company'):
-        raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자에게 문의하세요.")
 
 
 class CrmCompanyCreate(BaseModel):
@@ -145,7 +119,7 @@ def get_crm_company(company_id: int, request: Request):
 @router.post("")
 def create_crm_company(company: CrmCompanyCreate, request: Request):
     """CRM 회사 생성"""
-    check_add_permission(request)
+    require_perm(request, "can_add_company")
     with sales_db_cursor() as cur:
         try:
             cur.execute("INSERT INTO companies (name) VALUES (%s)", (company.name,))
@@ -161,7 +135,7 @@ def create_crm_company(company: CrmCompanyCreate, request: Request):
 @router.put("/{company_id}")
 def update_crm_company(company_id: int, company: CrmCompanyUpdate, request: Request):
     """CRM 회사 정보 수정"""
-    check_edit_permission(request)
+    require_perm(request, "can_edit_company")
     with sales_db_cursor() as cur:
         # 존재 확인
         cur.execute("SELECT * FROM companies WHERE id = %s", (company_id,))
@@ -184,7 +158,7 @@ def update_crm_company(company_id: int, company: CrmCompanyUpdate, request: Requ
 @router.delete("/{company_id}")
 def delete_crm_company(company_id: int, request: Request):
     """CRM 회사 삭제 (팀/연락처/미팅도 함께 삭제됨 - CASCADE)"""
-    check_delete_permission(request)
+    require_perm(request, "can_delete_company")
     with sales_db_cursor() as cur:
         cur.execute("DELETE FROM companies WHERE id = %s", (company_id,))
         if cur.rowcount == 0:

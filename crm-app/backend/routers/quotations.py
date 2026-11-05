@@ -1,5 +1,6 @@
 """HTC CRM — Quotations Router (견적서)"""
 from fastapi import APIRouter, HTTPException, Query, Request
+from permissions import require_perm
 from typing import Optional
 from decimal import Decimal
 from datetime import datetime
@@ -11,9 +12,7 @@ router = APIRouter(prefix="/quotations", tags=["quotations"])
 
 def get_user(request: Request):
     """인증된 사용자 정보 반환"""
-    user = getattr(request.state, 'user', None)
-    if not user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    user = require_perm(request)
     return user
 
 

@@ -7,7 +7,7 @@ from database import db_cursor
 router = APIRouter(tags=["posts"])
 
 # Import get_session from auth router (DB-based session)
-from routers.auth import get_session
+from routers.auth import require_perm
 
 class PostCreate(BaseModel):
     title: str
@@ -22,11 +22,7 @@ class PostUpdate(BaseModel):
 @router.get("/posts")
 def get_posts(request: Request):
     """Get all posts with author information and read status"""
-    session_token = request.cookies.get("session_token")
-    current_user = get_session(session_token)
-
-    if not current_user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    current_user = require_perm(request)
 
     user_id = current_user['id']
 
@@ -47,11 +43,7 @@ def get_posts(request: Request):
 @router.get("/posts/unread/count")
 def get_unread_count(request: Request):
     """Get count of unread posts for current user"""
-    session_token = request.cookies.get("session_token")
-    current_user = get_session(session_token)
-
-    if not current_user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    current_user = require_perm(request)
 
     user_id = current_user['id']
 
@@ -69,11 +61,7 @@ def get_unread_count(request: Request):
 @router.get("/posts/{post_id}")
 def get_post(post_id: int, request: Request):
     """Get single post"""
-    session_token = request.cookies.get("session_token")
-    current_user = get_session(session_token)
-
-    if not current_user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    current_user = require_perm(request)
 
     with db_cursor() as cur:
         cur.execute("""
@@ -93,11 +81,7 @@ def get_post(post_id: int, request: Request):
 @router.post("/posts")
 def create_post(post: PostCreate, request: Request):
     """Create new post (logged in user)"""
-    session_token = request.cookies.get("session_token")
-    current_user = get_session(session_token)
-
-    if not current_user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    current_user = require_perm(request)
 
     user_id = current_user['id']
 
@@ -116,11 +100,7 @@ def create_post(post: PostCreate, request: Request):
 @router.put("/posts/{post_id}")
 def update_post(post_id: int, post: PostUpdate, request: Request):
     """Update post (only author can update)"""
-    session_token = request.cookies.get("session_token")
-    current_user = get_session(session_token)
-
-    if not current_user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    current_user = require_perm(request)
 
     user_id = current_user['id']
 
@@ -163,11 +143,7 @@ def update_post(post_id: int, post: PostUpdate, request: Request):
 @router.delete("/posts/{post_id}")
 def delete_post(post_id: int, request: Request):
     """Delete post (only author or admin can delete)"""
-    session_token = request.cookies.get("session_token")
-    current_user = get_session(session_token)
-
-    if not current_user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    current_user = require_perm(request)
 
     user_id = current_user['id']
 
@@ -189,11 +165,7 @@ def delete_post(post_id: int, request: Request):
 @router.post("/posts/{post_id}/read")
 def mark_post_as_read(post_id: int, request: Request):
     """Mark post as read for current user"""
-    session_token = request.cookies.get("session_token")
-    current_user = get_session(session_token)
-
-    if not current_user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    current_user = require_perm(request)
 
     user_id = current_user['id']
 
@@ -223,11 +195,7 @@ class CommentUpdate(BaseModel):
 @router.get("/posts/{post_id}/comments")
 def get_comments(post_id: int, request: Request):
     """Get all comments for a post with reply hierarchy"""
-    session_token = request.cookies.get("session_token")
-    current_user = get_session(session_token)
-
-    if not current_user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    current_user = require_perm(request)
 
     with db_cursor() as cur:
         cur.execute("""
@@ -250,11 +218,7 @@ def create_comment(post_id: int, comment: CommentCreate, request: Request):
     """Create a new comment or reply"""
     print(f"[DEBUG] 댓글 생성 요청: post_id={post_id}, content={comment.content}, parent_comment_id={comment.parent_comment_id}")
 
-    session_token = request.cookies.get("session_token")
-    current_user = get_session(session_token)
-
-    if not current_user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    current_user = require_perm(request)
 
     user_id = current_user['id']
 
@@ -304,11 +268,7 @@ def create_comment(post_id: int, comment: CommentCreate, request: Request):
 @router.put("/posts/{post_id}/comments/{comment_id}")
 def update_comment(post_id: int, comment_id: int, comment: CommentUpdate, request: Request):
     """Update a comment (only author can update)"""
-    session_token = request.cookies.get("session_token")
-    current_user = get_session(session_token)
-
-    if not current_user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    current_user = require_perm(request)
 
     user_id = current_user['id']
 
@@ -333,11 +293,7 @@ def update_comment(post_id: int, comment_id: int, comment: CommentUpdate, reques
 @router.delete("/posts/{post_id}/comments/{comment_id}")
 def delete_comment(post_id: int, comment_id: int, request: Request):
     """Delete a comment (only author or admin can delete)"""
-    session_token = request.cookies.get("session_token")
-    current_user = get_session(session_token)
-
-    if not current_user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    current_user = require_perm(request)
 
     user_id = current_user['id']
 
@@ -362,11 +318,7 @@ def delete_comment(post_id: int, comment_id: int, request: Request):
 @router.get("/notifications/comments")
 def get_comment_notifications(request: Request):
     """Get comment notifications for current user"""
-    session_token = request.cookies.get("session_token")
-    current_user = get_session(session_token)
-
-    if not current_user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    current_user = require_perm(request)
 
     user_id = current_user['id']
 
@@ -394,11 +346,7 @@ def get_comment_notifications(request: Request):
 @router.get("/notifications/comments/unread/count")
 def get_unread_comment_notifications_count(request: Request):
     """Get count of unread comment notifications"""
-    session_token = request.cookies.get("session_token")
-    current_user = get_session(session_token)
-
-    if not current_user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    current_user = require_perm(request)
 
     user_id = current_user['id']
 
@@ -416,11 +364,7 @@ def get_unread_comment_notifications_count(request: Request):
 @router.post("/notifications/comments/{notification_id}/read")
 def mark_notification_as_read(notification_id: int, request: Request):
     """Mark a notification as read"""
-    session_token = request.cookies.get("session_token")
-    current_user = get_session(session_token)
-
-    if not current_user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    current_user = require_perm(request)
 
     user_id = current_user['id']
 
@@ -436,11 +380,7 @@ def mark_notification_as_read(notification_id: int, request: Request):
 @router.post("/notifications/comments/read-all")
 def mark_all_notifications_as_read(request: Request):
     """Mark all notifications as read"""
-    session_token = request.cookies.get("session_token")
-    current_user = get_session(session_token)
-
-    if not current_user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    current_user = require_perm(request)
 
     user_id = current_user['id']
 
@@ -456,11 +396,7 @@ def mark_all_notifications_as_read(request: Request):
 @router.delete("/notifications/comments/read")
 def delete_read_notifications(request: Request):
     """Delete all read notifications"""
-    session_token = request.cookies.get("session_token")
-    current_user = get_session(session_token)
-
-    if not current_user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    current_user = require_perm(request)
 
     user_id = current_user['id']
 

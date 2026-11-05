@@ -1,28 +1,11 @@
 """HTC CRM — Teams Router"""
 from fastapi import APIRouter, HTTPException, Query, Request
+from permissions import require_perm
 from typing import Optional, List
 from pydantic import BaseModel
 from database import sales_db_cursor
 
 router = APIRouter(prefix="/teams", tags=["teams"])
-
-
-def check_edit_permission(request: Request):
-    """업체 수정 권한 확인 (팀 추가/수정)"""
-    user = getattr(request.state, 'user', None)
-    if not user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
-    if not user.get('is_admin') and not user.get('can_edit_company'):
-        raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자에게 문의하세요.")
-
-
-def check_delete_permission(request: Request):
-    """업체 삭제 권한 확인 (팀 삭제)"""
-    user = getattr(request.state, 'user', None)
-    if not user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
-    if not user.get('is_admin') and not user.get('can_delete_company'):
-        raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자에게 문의하세요.")
 
 
 class TeamCreate(BaseModel):
@@ -75,7 +58,7 @@ def get_team(team_id: int):
 @router.post("")
 def create_team(team: TeamCreate, request: Request):
     """팀 생성"""
-    check_edit_permission(request)
+    require_perm(request, "can_edit_company")
     with sales_db_cursor() as cur:
         # 회사 존재 확인
         cur.execute("SELECT id FROM companies WHERE id = %s", (team.company_id,))
@@ -104,7 +87,7 @@ def create_team(team: TeamCreate, request: Request):
 @router.put("/{team_id}")
 def update_team(team_id: int, team: TeamUpdate, request: Request):
     """팀 정보 수정"""
-    check_edit_permission(request)
+    require_perm(request, "can_edit_company")
     with sales_db_cursor() as cur:
         # 존재 확인
         cur.execute("SELECT * FROM teams WHERE id = %s", (team_id,))
@@ -132,7 +115,7 @@ def update_team(team_id: int, team: TeamUpdate, request: Request):
 @router.delete("/{team_id}")
 def delete_team(team_id: int, request: Request):
     """팀 삭제 (연락처가 있으면 삭제 불가)"""
-    check_delete_permission(request)
+    require_perm(request, "can_delete_company")
     with sales_db_cursor() as cur:
         # 연락처 확인
         cur.execute("SELECT COUNT(*) as cnt FROM contacts WHERE team_id = %s", (team_id,))

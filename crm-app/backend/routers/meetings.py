@@ -1,47 +1,12 @@
 """HTC CRM — Meetings Router"""
 from fastapi import APIRouter, HTTPException, Query, Request
+from permissions import require_perm
 from typing import Optional
 from pydantic import BaseModel
 from database import sales_db_cursor
 from datetime import datetime, timedelta
 
 router = APIRouter(prefix="/meetings", tags=["meetings"])
-
-
-def check_view_permission(request: Request):
-    """미팅 조회 권한 확인"""
-    user = getattr(request.state, 'user', None)
-    if not user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
-    if not user.get('is_admin') and not user.get('can_view_meeting'):
-        raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자에게 문의하세요.")
-
-
-def check_add_permission(request: Request):
-    """미팅 추가 권한 확인"""
-    user = getattr(request.state, 'user', None)
-    if not user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
-    if not user.get('is_admin') and not user.get('can_add_meeting'):
-        raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자에게 문의하세요.")
-
-
-def check_delete_permission(request: Request):
-    """미팅 삭제 권한 확인"""
-    user = getattr(request.state, 'user', None)
-    if not user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
-    if not user.get('is_admin') and not user.get('can_delete_meeting'):
-        raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자에게 문의하세요.")
-
-
-def check_edit_permission(request: Request):
-    """미팅 수정 권한 확인"""
-    user = getattr(request.state, 'user', None)
-    if not user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
-    if not user.get('is_admin') and not user.get('can_add_meeting'):
-        raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자에게 문의하세요.")
 
 
 class MeetingCreate(BaseModel):
@@ -67,7 +32,7 @@ def list_meetings(
     limit: Optional[int] = Query(100)
 ):
     """미팅 목록 조회"""
-    check_view_permission(request)
+    require_perm(request, "can_view_meeting")
     sql = """
         SELECT
             m.*,
@@ -114,7 +79,7 @@ def list_meetings(
 @router.get("/recent")
 def get_recent_meetings(request: Request, days: int = Query(7, description="최근 N일"), limit: int = Query(100)):
     """최근 미팅 조회"""
-    check_view_permission(request)
+    require_perm(request, "can_view_meeting")
     cutoff_date = datetime.now() - timedelta(days=days)
 
     sql = """
@@ -143,7 +108,7 @@ def get_recent_meetings(request: Request, days: int = Query(7, description="최�
 @router.get("/timeline/{company_id}")
 def get_company_timeline(company_id: int, request: Request):
     """회사 타임라인 조회 (모든 미팅 기록)"""
-    check_view_permission(request)
+    require_perm(request, "can_view_meeting")
     sql = """
         SELECT
             m.*,
@@ -166,7 +131,7 @@ def get_company_timeline(company_id: int, request: Request):
 @router.get("/{meeting_id}")
 def get_meeting(meeting_id: int, request: Request):
     """미팅 상세 조회"""
-    check_view_permission(request)
+    require_perm(request, "can_view_meeting")
     with sales_db_cursor() as cur:
         cur.execute("""
             SELECT
@@ -192,7 +157,7 @@ def get_meeting(meeting_id: int, request: Request):
 @router.post("")
 def create_meeting(meeting: MeetingCreate, request: Request):
     """미팅 생성"""
-    check_add_permission(request)
+    require_perm(request, "can_add_meeting")
     with sales_db_cursor() as cur:
         # 연락처 존재 확인
         cur.execute("SELECT id FROM contacts WHERE id = %s", (meeting.contact_id,))
@@ -226,7 +191,7 @@ def create_meeting(meeting: MeetingCreate, request: Request):
 @router.put("/{meeting_id}")
 def update_meeting(meeting_id: int, meeting: MeetingUpdate, request: Request):
     """미팅 정보 수정"""
-    check_edit_permission(request)
+    require_perm(request, "can_add_meeting")
     with sales_db_cursor() as cur:
         # 존재 확인
         cur.execute("SELECT * FROM meetings WHERE id = %s", (meeting_id,))
@@ -277,7 +242,7 @@ def update_meeting(meeting_id: int, meeting: MeetingUpdate, request: Request):
 @router.delete("/{meeting_id}")
 def delete_meeting(meeting_id: int, request: Request):
     """미팅 삭제"""
-    check_delete_permission(request)
+    require_perm(request, "can_delete_meeting")
     with sales_db_cursor() as cur:
         cur.execute("DELETE FROM meetings WHERE id = %s", (meeting_id,))
         if cur.rowcount == 0:

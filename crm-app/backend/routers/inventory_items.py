@@ -1,5 +1,6 @@
 """HTC CRM — Inventory Items Proxy Router (재고 품목 조회)"""
 from fastapi import APIRouter, Query, Request, HTTPException
+from permissions import require_perm
 from typing import Optional
 from database import db_cursor  # htc_inventory DB 접속
 
@@ -8,9 +9,7 @@ router = APIRouter(prefix="/inventory", tags=["inventory"])
 
 def get_user(request: Request):
     """인증된 사용자 정보 반환"""
-    user = getattr(request.state, 'user', None)
-    if not user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    user = require_perm(request)
     return user
 
 

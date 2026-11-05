@@ -1,5 +1,6 @@
 """HTC CRM — Google Drive OAuth & Upload Router"""
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
+from permissions import require_perm
 from fastapi.responses import RedirectResponse, JSONResponse
 from typing import Optional
 import os
@@ -151,9 +152,7 @@ async def create_folder_hierarchy(service, company_name, team_name, contact_name
 @router.get("/auth")
 def google_auth(request: Request):
     """Google OAuth 인증 시작"""
-    user = getattr(request.state, 'user', None)
-    if not user:
-        raise HTTPException(401, "로그인이 필요합니다")
+    user = require_perm(request)
 
     flow = get_flow()
 
@@ -207,9 +206,7 @@ def google_callback(request: Request, code: str, state: str):
 @router.get("/auth-status")
 def check_auth_status(request: Request):
     """Google Drive 인증 상태 확인"""
-    user = getattr(request.state, 'user', None)
-    if not user:
-        raise HTTPException(401, "로그인이 필요합니다")
+    user = require_perm(request)
 
     user_id = user.get("user_id")
     creds = get_credentials(user_id)
@@ -231,9 +228,7 @@ async def upload_to_drive(
     contact_name: Optional[str] = Form(None)
 ):
     """파일을 Google Drive에 업로드 (자동 폴더 생성 지원)"""
-    user = getattr(request.state, 'user', None)
-    if not user:
-        raise HTTPException(401, "로그인이 필요합니다")
+    user = require_perm(request)
 
     user_id = user.get("user_id")
     creds = get_credentials(user_id)
@@ -304,9 +299,7 @@ def create_folder(
     parent_folder_id: Optional[str] = Form(None)
 ):
     """Google Drive에 폴더 생성"""
-    user = getattr(request.state, 'user', None)
-    if not user:
-        raise HTTPException(401, "로그인이 필요합니다")
+    user = require_perm(request)
 
     user_id = user.get("user_id")
     creds = get_credentials(user_id)
@@ -351,9 +344,7 @@ def get_folder_url(
     contact_name: str
 ):
     """연락처 폴더 URL 가져오기"""
-    user = getattr(request.state, 'user', None)
-    if not user:
-        raise HTTPException(401, "로그인이 필요합니다")
+    user = require_perm(request)
 
     user_id = user.get("user_id")
     creds = get_credentials(user_id)
@@ -418,9 +409,7 @@ def search_files(
     folder_id: Optional[str] = None
 ):
     """Google Drive 파일 검색"""
-    user = getattr(request.state, 'user', None)
-    if not user:
-        raise HTTPException(401, "로그인이 필요합니다")
+    user = require_perm(request)
 
     user_id = user.get("user_id")
     creds = get_credentials(user_id)

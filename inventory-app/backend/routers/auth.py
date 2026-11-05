@@ -53,6 +53,16 @@ def get_session(session_token: str):
             return user_data
     return None
 
+def require_perm(request: Request, field: str = None):
+    """로그인 확인, field를 주면 그 권한도 확인 (관리자는 전부 통과). 세션 사용자 dict 반환"""
+    user = get_session(request.cookies.get("session_token"))
+    if not user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    if field and not (user.get("is_admin") or user.get(field)):
+        raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자에게 문의하세요.")
+    return user
+
+
 def create_session(session_token: str, user_id: int, user_data: dict):
     """DB에 세션 생성"""
     with db_cursor() as cur:
@@ -229,14 +239,7 @@ def get_current_user(request: Request):
 @router.get("/auth/users")
 def list_users(request: Request):
     """List all users (admin only)"""
-    session_token = request.cookies.get("session_token")
-    session = get_session(session_token)
-
-    if not session:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
-
-    if not session['is_admin']:
-        raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자에게 문의하세요.")
+    session = require_perm(request, "is_admin")
 
     # 권한 필드 포함하여 조회
     permission_cols = ', '.join(PERMISSION_FIELDS)
@@ -249,14 +252,7 @@ def list_users(request: Request):
 @router.post("/auth/users")
 def create_user(user: UserCreate, request: Request):
     """Create new user (admin only)"""
-    session_token = request.cookies.get("session_token")
-    session = get_session(session_token)
-
-    if not session:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
-
-    if not session['is_admin']:
-        raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자에게 문의하세요.")
+    session = require_perm(request, "is_admin")
 
     with db_cursor() as cur:
         # Check if user_id already exists
@@ -275,14 +271,7 @@ def create_user(user: UserCreate, request: Request):
 @router.put("/auth/users/{user_id}")
 def update_user(user_id: int, user: UserUpdate, request: Request):
     """Update user (admin only)"""
-    session_token = request.cookies.get("session_token")
-    session = get_session(session_token)
-
-    if not session:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
-
-    if not session['is_admin']:
-        raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자에게 문의하세요.")
+    session = require_perm(request, "is_admin")
 
     updates = []
     values = []
@@ -331,11 +320,7 @@ def update_user(user_id: int, user: UserUpdate, request: Request):
 @router.put("/auth/profile")
 def update_profile(data: ProfileUpdate, request: Request):
     """Update own profile (email, phone, password only)"""
-    session_token = request.cookies.get("session_token")
-    session = get_session(session_token)
-
-    if not session:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    session = require_perm(request)
 
     current_user = session
     user_id = current_user['id']
@@ -368,11 +353,7 @@ def update_profile(data: ProfileUpdate, request: Request):
 @router.delete("/auth/users/{user_id}")
 def delete_user(user_id: int, request: Request):
     """Delete user (admin only)"""
-    session_token = request.cookies.get("session_token")
-    session = get_session(session_token)
-
-    if not session:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    session = require_perm(request)
 
     current_user = session
 

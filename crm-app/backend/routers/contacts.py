@@ -1,5 +1,6 @@
 """HTC CRM — Contacts Router"""
 from fastapi import APIRouter, HTTPException, Query, Request
+from permissions import require_perm
 from fastapi.responses import StreamingResponse
 from typing import Optional, List
 from pydantic import BaseModel
@@ -20,42 +21,6 @@ CONTACT_CATEGORIES = [
     '기타업체',
     '분류필요'
 ]
-
-
-def check_edit_permission(request: Request):
-    """담당자 정보 수정 권한 확인 (업체,담당자 수정 권한 필요)"""
-    user = getattr(request.state, 'user', None)
-    if not user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
-    if not user.get('is_admin') and not user.get('can_edit_company'):
-        raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자에게 문의하세요.")
-
-
-def check_transfer_permission(request: Request):
-    """이직 처리 권한 확인"""
-    user = getattr(request.state, 'user', None)
-    if not user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
-    if not user.get('is_admin') and not user.get('can_transfer_contact'):
-        raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자에게 문의하세요.")
-
-
-def check_add_contact_permission(request: Request):
-    """담당자 추가 권한 확인 (업체 수정 권한 필요)"""
-    user = getattr(request.state, 'user', None)
-    if not user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
-    if not user.get('is_admin') and not user.get('can_edit_company'):
-        raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자에게 문의하세요.")
-
-
-def check_delete_contact_permission(request: Request):
-    """담당자 삭제 권한 확인 (업체 삭제 권한 필요)"""
-    user = getattr(request.state, 'user', None)
-    if not user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
-    if not user.get('is_admin') and not user.get('can_delete_company'):
-        raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자에게 문의하세요.")
 
 
 class ContactCreate(BaseModel):
@@ -153,11 +118,7 @@ def list_contacts(
 def get_stale_contacts(request: Request, days: int = Query(30, description="미팅이 없는 일수")):
     """오래된 연락처 조회 (N일 이상 미팅 없음)"""
     # 미팅 조회 권한 확인 - 이 API는 미팅 데이터 기반이므로 권한 필수
-    user = getattr(request.state, 'user', None)
-    if not user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
-    if not user.get('is_admin') and not user.get('can_view_meeting'):
-        raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자에게 문의하세요.")
+    user = require_perm(request, "can_view_meeting")
 
     cutoff_date = datetime.now() - timedelta(days=days)
 
@@ -364,7 +325,7 @@ class TransferHistoryCreate(BaseModel):
 @router.post("/{contact_id}/transfer-history")
 def add_transfer_history(contact_id: int, data: TransferHistoryCreate, request: Request):
     """담당자 이직 이력 수동 추가 (이전 회사 정보 기록)"""
-    check_transfer_permission(request)
+    require_perm(request, "can_transfer_contact")
 
     with sales_db_cursor() as cur:
         # 현재 담당자 정보 조회
@@ -403,7 +364,7 @@ def add_transfer_history(contact_id: int, data: TransferHistoryCreate, request: 
 @router.delete("/{contact_id}/transfer-history/{history_id}")
 def delete_transfer_history(contact_id: int, history_id: int, request: Request):
     """담당자 이직 이력 삭제"""
-    check_transfer_permission(request)
+    require_perm(request, "can_transfer_contact")
 
     with sales_db_cursor() as cur:
         cur.execute("""
@@ -420,7 +381,7 @@ def delete_transfer_history(contact_id: int, history_id: int, request: Request):
 @router.post("")
 def create_contact(contact: ContactCreate, request: Request):
     """연락처 생성"""
-    check_add_contact_permission(request)
+    require_perm(request, "can_edit_company")
     with sales_db_cursor() as cur:
         # 팀 존재 확인
         cur.execute("SELECT id FROM teams WHERE id = %s", (contact.team_id,))
@@ -455,9 +416,9 @@ def update_contact(contact_id: int, contact: ContactUpdate, request: Request):
     """연락처 정보 수정"""
     # team_id 변경은 이직 처리 권한 필요, 그 외는 수정 권한 필요
     if contact.team_id is not None:
-        check_transfer_permission(request)
+        require_perm(request, "can_transfer_contact")
     else:
-        check_edit_permission(request)
+        require_perm(request, "can_edit_company")
     with sales_db_cursor() as cur:
         # 현재 정보 조회 (이직 이력 저장용)
         cur.execute("""
@@ -561,7 +522,7 @@ def update_contact(contact_id: int, contact: ContactUpdate, request: Request):
 @router.post("/{contact_id}/resign")
 def resign_contact(contact_id: int, request: Request):
     """담당자 퇴사 처리"""
-    check_transfer_permission(request)
+    require_perm(request, "can_transfer_contact")
     with sales_db_cursor() as cur:
         cur.execute("SELECT id, status FROM contacts WHERE id = %s", (contact_id,))
         contact = cur.fetchone()
@@ -591,7 +552,7 @@ def resign_contact(contact_id: int, request: Request):
 @router.post("/{contact_id}/restore")
 def restore_contact(contact_id: int, request: Request):
     """담당자 퇴사 취소 (복직)"""
-    check_transfer_permission(request)
+    require_perm(request, "can_transfer_contact")
     with sales_db_cursor() as cur:
         cur.execute("SELECT id, status FROM contacts WHERE id = %s", (contact_id,))
         contact = cur.fetchone()
@@ -621,7 +582,7 @@ def restore_contact(contact_id: int, request: Request):
 @router.delete("/{contact_id}")
 def delete_contact(contact_id: int, request: Request):
     """연락처 삭제 (미팅 기록도 함께 삭제됨 - CASCADE)"""
-    check_delete_contact_permission(request)
+    require_perm(request, "can_delete_company")
     with sales_db_cursor() as cur:
         cur.execute("DELETE FROM contacts WHERE id = %s", (contact_id,))
         if cur.rowcount == 0:

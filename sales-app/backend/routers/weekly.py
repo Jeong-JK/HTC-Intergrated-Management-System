@@ -1,5 +1,6 @@
 """HTC Sales Pipeline — Weekly Schedule API"""
 from fastapi import APIRouter, HTTPException, Request
+from permissions import require_perm
 from typing import Optional
 from pydantic import BaseModel
 from database import db_cursor
@@ -8,23 +9,6 @@ import json
 
 router = APIRouter(tags=["Weekly"])
 
-
-def check_edit_permission(request: Request):
-    """Weekly 수정 권한 확인"""
-    user = getattr(request.state, 'user', None)
-    if not user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
-    if not user.get('is_admin') and not user.get('can_edit_weekly'):
-        raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자에게 문의하세요.")
-
-
-def check_delete_permission(request: Request):
-    """Weekly 삭제 권한 확인"""
-    user = getattr(request.state, 'user', None)
-    if not user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
-    if not user.get('is_admin') and not user.get('can_delete_weekly'):
-        raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자에게 문의하세요.")
 
 # ============ Pydantic Models ============
 
@@ -199,7 +183,7 @@ def create_weekly_schedule(schedule: WeeklyScheduleCreate):
 @router.put("/weekly/{schedule_id}")
 def update_weekly_schedule(schedule_id: int, schedule: WeeklyScheduleUpdate, request: Request):
     """Weekly 일정 업데이트"""
-    check_edit_permission(request)
+    require_perm(request, "can_edit_weekly")
     with db_cursor() as cur:
         cur.execute("SELECT id FROM weekly_schedule WHERE id = %s", (schedule_id,))
         if not cur.fetchone():
@@ -225,7 +209,7 @@ def update_weekly_schedule(schedule_id: int, schedule: WeeklyScheduleUpdate, req
 @router.delete("/weekly/{schedule_id}")
 def delete_weekly_schedule(schedule_id: int, request: Request):
     """Weekly 일정 삭제"""
-    check_delete_permission(request)
+    require_perm(request, "can_delete_weekly")
     with db_cursor() as cur:
         cur.execute("DELETE FROM weekly_schedule WHERE id = %s", (schedule_id,))
         if cur.rowcount == 0:

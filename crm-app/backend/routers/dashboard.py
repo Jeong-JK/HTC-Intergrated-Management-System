@@ -1,5 +1,6 @@
 """HTC CRM — Dashboard Router"""
 from fastapi import APIRouter, HTTPException, Request
+from permissions import require_perm
 from database import sales_db_cursor
 from datetime import datetime, timedelta
 
@@ -10,11 +11,7 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 def get_stale_companies_dashboard(request: Request):
     """30일/60일/90일 초과 담당자 대시보드 (원본 PyQt6와 동일)"""
     # 미팅 조회 권한 확인 - 이 API는 미팅 데이터 기반이므로 권한 필수
-    user = getattr(request.state, 'user', None)
-    if not user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
-    if not user.get('is_admin') and not user.get('can_view_meeting'):
-        raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자에게 문의하세요.")
+    user = require_perm(request, "can_view_meeting")
 
     now = datetime.now()
     days_30_ago = now - timedelta(days=30)
@@ -184,11 +181,7 @@ def get_dashboard_summary(request: Request):
 def get_all_contacts_with_dates(request: Request, show_all: bool = False, min_days: int = 30):
     """팝업용 - 전체 또는 필터링된 담당자 목록 (미팅 + 연락 날짜)"""
     # 미팅 조회 권한 확인 - 이 API는 미팅 데이터 기반이므로 권한 필수
-    user = getattr(request.state, 'user', None)
-    if not user:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
-    if not user.get('is_admin') and not user.get('can_view_meeting'):
-        raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자에게 문의하세요.")
+    user = require_perm(request, "can_view_meeting")
 
     sql = """
         SELECT
