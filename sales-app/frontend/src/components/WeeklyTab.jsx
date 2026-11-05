@@ -1,25 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Calendar, GripVertical, Plus, Trash2, X, ChevronUp } from 'lucide-react'
 import { getWeeklySchedules, updateWeeklySchedule, createWeeklySchedule, deleteWeeklySchedule } from '../api'
+import { PROJECT_COLORS } from '../utils/projectCommon'
 
 // 2026년도 월별 주차 정보
 const WEEKS_2026 = {
   1: 5, 2: 5, 3: 5, 4: 5, 5: 5, 6: 5, 7: 5, 8: 5, 9: 4, 10: 5, 11: 5, 12: 5
 }
-
-// 프로젝트 번호별 색상 할당 (일관된 색상)
-const PROJECT_COLORS = [
-  '#93c5fd', // blue-300
-  '#86efac', // green-300
-  '#fcd34d', // yellow-300
-  '#f9a8d4', // pink-300
-  '#c4b5fd', // purple-300
-  '#fdba74', // orange-300
-  '#67e8f9', // cyan-300
-  '#fca5a5', // red-300
-  '#d8b4fe', // violet-300
-  '#a7f3d0', // emerald-300
-]
 
 const getProjectColor = (projectNo) => {
   if (!projectNo) return PROJECT_COLORS[0]

@@ -3,49 +3,7 @@ import { Search, Plus, Edit2, Trash2, Save, X, ChevronUp } from 'lucide-react'
 import { getPurchases, getPurchaseStats, createPurchase, updatePurchase, deletePurchase } from '../api'
 import Combobox from './Combobox'
 import PurchaseModal from './PurchaseModal'
-
-// 공급사 옵션
-const SUPPLIER_OPTIONS = ['Silvus', 'SWA', '한림', 'Octane', '퓨리원', '국제전파', 'Bren-Tronics']
-
-// 입고여부 옵션
-const RECEIVED_STATUS_OPTIONS = ['미입고', '입고완료', '부분입고']
-
-// 날짜 파싱 함수 (다양한 형식 지원 - 복사/붙여넣기용)
-const parseDate = (input) => {
-  if (!input) return ''
-  const str = String(input).trim()
-
-  // 이미 YYYY-MM-DD 형식이면 그대로 반환
-  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str
-
-  // YY.MM.DD 또는 YY-MM-DD 형식
-  let match = str.match(/^(\d{2})[.\-/](\d{1,2})[.\-/](\d{1,2})$/)
-  if (match) {
-    const year = parseInt(match[1]) < 50 ? '20' + match[1] : '19' + match[1]
-    return `${year}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`
-  }
-
-  // YYYY.MM.DD 또는 YYYY/MM/DD 형식
-  match = str.match(/^(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})$/)
-  if (match) {
-    return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`
-  }
-
-  // YYYYMMDD 형식 (8자리 숫자)
-  match = str.match(/^(\d{4})(\d{2})(\d{2})$/)
-  if (match) {
-    return `${match[1]}-${match[2]}-${match[3]}`
-  }
-
-  // YYMMDD 형식 (6자리 숫자)
-  match = str.match(/^(\d{2})(\d{2})(\d{2})$/)
-  if (match) {
-    const year = parseInt(match[1]) < 50 ? '20' + match[1] : '19' + match[1]
-    return `${year}-${match[2]}-${match[3]}`
-  }
-
-  return str // 파싱 실패시 원본 반환
-}
+import { parseDate, SUPPLIER_OPTIONS, RECEIVED_STATUS_OPTIONS } from '../utils/projectCommon'
 
 export default function PurchasesTab({ year }) {
   const [purchases, setPurchases] = useState([])

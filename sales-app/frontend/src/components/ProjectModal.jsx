@@ -3,12 +3,7 @@ import { X, Plus, Trash2, Search, ChevronUp, ChevronDown } from 'lucide-react'
 import Combobox from './Combobox'
 import PurchaseItemSelectModal from './PurchaseItemSelectModal'
 import { getPurchasesByPONumber } from '../api'
-
-// 공급사 옵션
-const SUPPLIER_OPTIONS = ['Silvus', 'SWA', '한림', 'Octane', '퓨리원', '국제전파', 'Bren-Tronics']
-
-// 상태 옵션
-const STATUS_OPTIONS = ['진행중', '완료', '납기체크', '수금필요']
+import { STATUS_OPTIONS, SUPPLIER_OPTIONS } from '../utils/projectCommon'
 
 // 상태 텍스트 포맷팅
 const formatStatusForDisplay = (status) => {
