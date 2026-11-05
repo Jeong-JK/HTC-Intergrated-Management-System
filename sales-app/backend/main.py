@@ -15,6 +15,9 @@ from routers import projects, purchases, weekly, posts, sheets
 
 app = FastAPI(title=APP_TITLE, version=APP_VERSION)
 
+# 내부 API 호출용 (localhost), 리디렉션용 (외부 URL)
+AUTH_API_URL = "http://localhost:8000"
+
 # 인증 체크 미들웨어
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -29,11 +32,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
         session_token = request.cookies.get("session_token")
 
         if session_token:
-            # inventory-app의 인증 API 호출
+            # inventory-app의 인증 API 호출 (내부 localhost 사용)
             try:
                 async with httpx.AsyncClient() as client:
                     response = await client.get(
-                        f"{AUTH_SERVICE_URL}/api/auth/me",
+                        f"{AUTH_API_URL}/api/auth/me",
                         cookies={"session_token": session_token},
                         timeout=2.0
                     )
@@ -52,13 +55,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
                                     status_code=403,
                                     content={"detail": "권한이 없습니다. 관리자에게 문의하세요."}
                                 )
-                            # HTML 페이지 요청은 메인 허브(ims.hltac.com)로 리다이렉트
-                            host = request.headers.get("host", "").split(":")[0]
-                            if "hltac.com" in host:
-                                redirect_url = "http://ims.hltac.com/"
-                            else:
-                                redirect_url = f"http://{host.split(':')[0]}:8000/"
-                            return RedirectResponse(url=redirect_url, status_code=302)
+                            # HTML 페이지 요청은 메인 허브(inventory-app)로 리다이렉트
+                            return RedirectResponse(url=AUTH_SERVICE_URL, status_code=302)
 
                         return await call_next(request)
             except Exception as e:
@@ -74,13 +72,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 content={"detail": "로그인이 필요합니다"}
             )
 
-        # HTML 페이지 요청은 메인 허브(ims.hltac.com)로 리다이렉트
-        host = request.headers.get("host", "").split(":")[0]
-        if "hltac.com" in host:
-            redirect_url = "http://ims.hltac.com/"
-        else:
-            redirect_url = f"http://{host.split(':')[0]}:8000/"
-        return RedirectResponse(url=redirect_url, status_code=302)
+        # HTML 페이지 요청은 메인 허브(inventory-app)로 리다이렉트
+        return RedirectResponse(url=AUTH_SERVICE_URL, status_code=302)
 
 app.add_middleware(AuthMiddleware)
 
@@ -127,4 +120,4 @@ if os.path.exists(STATIC_DIR):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8001, reload=True)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

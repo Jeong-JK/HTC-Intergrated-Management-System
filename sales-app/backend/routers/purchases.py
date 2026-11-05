@@ -94,7 +94,7 @@ def get_purchases(
             query += " AND pu.received_status = %s"
             params.append(received_status)
 
-        query += " ORDER BY CASE WHEN pu.po_number IS NULL OR pu.po_number = '' THEN 1 ELSE 0 END, pu.po_number LIMIT %s OFFSET %s"
+        query += " ORDER BY pu.id LIMIT %s OFFSET %s"
         params.extend([limit, offset])
 
         cur.execute(query, params)

@@ -471,6 +471,7 @@ export default function ProjectsTab({ year, isActive }) {
       }
 
       // 기존 purchase_items의 product_name + po_number 조합으로 매칭하여 업데이트
+      let missingExchangeRateCount = 0
       const updatedPurchaseItems = purchaseItems.map(existingItem => {
         // 매입관리에서 매칭되는 품목 찾기
         const matchedPurchase = allPurchaseData.find(p =>
@@ -497,7 +498,15 @@ export default function ProjectsTab({ year, isActive }) {
           exchangeRate = matchedPurchase.exchange_rate1 || matchedPurchase.exchange_rate2 || matchedPurchase.po_exchange_rate || null
           unitPriceUsd = netPrice
           totalPriceUsd = netPrice * quantity
-          totalPriceKrw = exchangeRate ? totalPriceUsd * exchangeRate : 0
+          // 환율이 있으면 새로 계산, 없으면 기존 값 유지 (0으로 초기화 방지)
+          if (exchangeRate) {
+            unitPriceKrw = unitPriceUsd * exchangeRate
+            totalPriceKrw = totalPriceUsd * exchangeRate
+          } else {
+            unitPriceKrw = existingItem.unit_price_krw || 0
+            totalPriceKrw = existingItem.total_price_krw || 0
+            if (totalPriceUsd > 0) missingExchangeRateCount++ // 환율 누락 카운트
+          }
         }
 
         return {
@@ -508,7 +517,7 @@ export default function ProjectsTab({ year, isActive }) {
           unit_price_krw: unitPriceKrw,
           total_price_usd: totalPriceUsd,
           total_price_krw: totalPriceKrw,
-          exchange_rate: exchangeRate,
+          exchange_rate: exchangeRate || existingItem.exchange_rate, // 환율도 기존 값 유지
           expected_date: matchedPurchase.expected_date,
           received_status: matchedPurchase.received_status || '미입고',
           // payment_status는 기존 값 유지 (사용자가 직접 입력)
@@ -517,7 +526,12 @@ export default function ProjectsTab({ year, isActive }) {
 
       await updateProject(projectId, { purchase_items: updatedPurchaseItems })
       loadData(true)
-      alert('매입 데이터가 동기화되었습니다.')
+
+      if (missingExchangeRateCount > 0) {
+        alert(`매입 데이터가 동기화되었습니다.\n\n⚠ 경고: ${missingExchangeRateCount}개 USD 항목에 환율이 없습니다.\n기존 환율 값이 유지되었습니다.\n\n매입관리에서 환율을 입력한 후 다시 동기화하세요.`)
+      } else {
+        alert('매입 데이터가 동기화되었습니다.')
+      }
     } catch (error) {
       console.error('동기화 실패:', error)
       alert('동기화에 실패했습니다.')
@@ -1209,7 +1223,7 @@ export default function ProjectsTab({ year, isActive }) {
                             ? { backgroundColor: '#0a53a8', color: '#ffffff' }
                             : purchaseItem.received_status === '부분입고'
                             ? { backgroundColor: '#00ff00', color: '#000000' }
-                            : { backgroundColor: '#b21e27', color: '#ffffff' }
+                            : {}
                         }
                         onDoubleClick={() => purchaseItem && handleCellDoubleClick('purchase', project.id, 'received_status', purchaseItem.received_status, rowIndex)}>
                         {editingCell?.type === 'purchase' && editingCell?.projectId === project.id && editingCell?.field === 'received_status' && editingCell?.itemIndex === rowIndex ? (
@@ -1227,7 +1241,7 @@ export default function ProjectsTab({ year, isActive }) {
                             <option value="입고완료">입고완료</option>
                           </select>
                         ) : (
-                          purchaseItem?.received_status || ''
+                          purchaseItem?.received_status === '입고완료' ? '입고완료' : ''
                         )}
                       </td>
                       <td

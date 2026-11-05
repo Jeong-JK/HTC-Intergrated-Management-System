@@ -19,6 +19,7 @@ from google_sheets_sync import (
 from database import db_cursor
 from sheet_write_sync import disable_sheet_sync, enable_sheet_sync
 from config import get_logger
+from sync_db_from_sheets import sync_purchases_from_sheet, sync_projects_from_sheet, sync_weekly_from_sheet
 
 logger = get_logger(__name__)
 
@@ -74,13 +75,27 @@ def get_sheet(sheet_name: str):
 
 @router.post("/sync")
 def sync_sheets():
-    """모든 시트 동기화 (구글 → 로컬)"""
+    """모든 시트 동기화 (구글 → 로컬 JSON → DB)"""
     try:
+        # 1단계: 구글 시트 → JSON 파일 동기화
         results = sync_all_sheets()
+
+        # 2단계: JSON → DB 동기화 (자동)
+        db_results = {}
+        try:
+            db_results['purchases'] = sync_purchases_from_sheet()
+            db_results['projects'] = sync_projects_from_sheet()
+            db_results['weekly'] = sync_weekly_from_sheet()
+            logger.info(f"DB 동기화 완료: {db_results}")
+        except Exception as db_err:
+            logger.error(f"DB 동기화 오류: {db_err}")
+            db_results['error'] = str(db_err)
+
         return {
             "success": True,
-            "message": "동기화 완료",
-            "results": results
+            "message": "동기화 완료 (시트 → DB)",
+            "results": results,
+            "db_sync": db_results
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"동기화 오류: {str(e)}")
@@ -88,15 +103,31 @@ def sync_sheets():
 
 @router.post("/sync/{sheet_name}")
 def sync_single_sheet(sheet_name: str):
-    """특정 시트만 동기화"""
+    """특정 시트만 동기화 (JSON + DB)"""
     if sheet_name not in SYNC_SHEETS:
         raise HTTPException(status_code=400, detail=f"'{sheet_name}'은(는) 동기화 대상 시트가 아닙니다.")
     try:
+        # 1단계: 구글 시트 → JSON
         row_count = sync_sheet_raw(sheet_name)
+
+        # 2단계: JSON → DB (해당 시트만)
+        db_count = 0
+        try:
+            if '매입' in sheet_name:
+                db_count = sync_purchases_from_sheet()
+            elif '프로젝트' in sheet_name:
+                db_count = sync_projects_from_sheet()
+            elif 'Weekly' in sheet_name or '위클리' in sheet_name:
+                db_count = sync_weekly_from_sheet()
+            logger.info(f"DB 동기화 완료: {sheet_name} = {db_count}건")
+        except Exception as db_err:
+            logger.error(f"DB 동기화 오류: {db_err}")
+
         return {
             "success": True,
             "sheet_name": sheet_name,
-            "row_count": row_count
+            "row_count": row_count,
+            "db_count": db_count
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"동기화 오류: {str(e)}")
