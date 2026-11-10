@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
-import { Home, ShieldAlert, CalendarDays, ChevronLeft, ChevronRight, Plus, X, UserX, Search } from 'lucide-react'
+import { Home, ShieldAlert, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Plus, X, UserX, Search } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { Modal, Btn, Field, inputCls } from '../components/Common.jsx'
 import DatePicker from '../components/DatePicker.jsx'
@@ -732,15 +732,30 @@ function WorkLogModal({ log, date, me, isAdmin, canEditOwn, canDeleteOwn, users,
   )
 }
 
+// 색상 표: 열 = 색상(빨 주 노 초 … 파 남 보 … 회색), 행 = 밝은 색 → 진한 색 (Tailwind 기본 색상 100~900)
+const PICKER_ROWS = [
+  ['#fee2e2', '#ffedd5', '#fef3c7', '#fef9c3', '#ecfccb', '#dcfce7', '#ccfbf1', '#cffafe', '#e0f2fe', '#dbeafe', '#e0e7ff', '#ede9fe', '#f3e8ff', '#fce7f3', '#f5f5f4', '#f1f5f9'],
+  ['#fecaca', '#fed7aa', '#fde68a', '#fef08a', '#d9f99d', '#bbf7d0', '#99f6e4', '#a5f3fc', '#bae6fd', '#bfdbfe', '#c7d2fe', '#ddd6fe', '#e9d5ff', '#fbcfe8', '#e7e5e4', '#e2e8f0'],
+  ['#fca5a5', '#fdba74', '#fcd34d', '#fde047', '#bef264', '#86efac', '#5eead4', '#67e8f9', '#7dd3fc', '#93c5fd', '#a5b4fc', '#c4b5fd', '#d8b4fe', '#f9a8d4', '#d6d3d1', '#cbd5e1'],
+  ['#f87171', '#fb923c', '#fbbf24', '#facc15', '#a3e635', '#4ade80', '#2dd4bf', '#22d3ee', '#38bdf8', '#60a5fa', '#818cf8', '#a78bfa', '#c084fc', '#f472b6', '#a8a29e', '#94a3b8'],
+  ['#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#ec4899', '#78716c', '#64748b'],
+  ['#dc2626', '#ea580c', '#d97706', '#ca8a04', '#65a30d', '#16a34a', '#0d9488', '#0891b2', '#0284c7', '#2563eb', '#4f46e5', '#7c3aed', '#9333ea', '#db2777', '#57534e', '#475569'],
+  ['#b91c1c', '#c2410c', '#b45309', '#a16207', '#4d7c0f', '#15803d', '#0f766e', '#0e7490', '#0369a1', '#1d4ed8', '#4338ca', '#6d28d9', '#7e22ce', '#be185d', '#44403c', '#334155'],
+  ['#991b1b', '#9a3412', '#92400e', '#854d0e', '#3f6212', '#166534', '#115e59', '#155e75', '#075985', '#1e40af', '#3730a3', '#5b21b6', '#6b21a8', '#9d174d', '#292524', '#1e293b'],
+  ['#7f1d1d', '#7c2d12', '#78350f', '#713f12', '#365314', '#14532d', '#134e4a', '#164e63', '#0c4a6e', '#1e3a8a', '#312e81', '#4c1d95', '#581c87', '#831843', '#1c1917', '#0f172a'],
+]
+
 // 관리자/업무일지관리자: 직원별 캘린더 색 지정 (고르면 바로 저장)
 function ColorModal({ users, onClose, onSaved }) {
   const [saving, setSaving] = useState(null)
+  const [openFor, setOpenFor] = useState(null) // 색상 표를 펼친 직원
   const timer = useRef(null)
 
   const pick = async (u, color) => {
     setSaving(u.id)
     try {
       await setWorkLogUserColor(u.id, color)
+      setOpenFor(null)
       onSaved()
     } catch (e) {
       alert(e.response?.data?.detail || '색상을 저장하지 못했습니다')
@@ -748,7 +763,7 @@ function ColorModal({ users, onClose, onSaved }) {
       setSaving(null)
     }
   }
-  // 직접 지정: 색상 창을 끄는 동안 값이 계속 바뀌므로 멈춘 뒤 한 번만 저장
+  // 직접 지정: 고르는 동안 값이 계속 바뀌므로 멈춘 뒤 한 번만 저장
   const pickLater = (u, color) => {
     clearTimeout(timer.current)
     timer.current = setTimeout(() => pick(u, color), 500)
@@ -761,21 +776,33 @@ function ColorModal({ users, onClose, onSaved }) {
         {users.map(u => {
           const current = userColor(u.id, u.worklog_color)
           return (
-            <div key={u.id} className={`flex flex-wrap items-center gap-3 py-2.5 ${saving === u.id ? 'opacity-50' : ''}`}>
-              <span className="w-28 flex-shrink-0 text-sm font-medium text-slate-800 truncate">{userLabel(u)}</span>
-              <span className="px-2 py-0.5 rounded text-[11px] font-medium" style={{ backgroundColor: current, color: textOn(current) }}>{u.name}</span>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {PALETTE.map(c => (
-                  <button key={c} onClick={() => pick(u, c)} title={c}
-                    className={`w-6 h-6 rounded-full border-2 ${current === c ? 'border-slate-800' : 'border-white shadow'}`}
-                    style={{ backgroundColor: c }} />
-                ))}
+            <div key={u.id} className={saving === u.id ? 'opacity-50' : ''}>
+              <div className="flex flex-wrap items-center gap-3 py-2.5">
+                <span className="w-28 flex-shrink-0 text-sm font-medium text-slate-800 truncate">{userLabel(u)}</span>
+                <span className="px-2 py-0.5 rounded text-[11px] font-medium" style={{ backgroundColor: current, color: textOn(current) }}>{u.name}</span>
+                <button onClick={() => setOpenFor(openFor === u.id ? null : u.id)} title="색상 표에서 고르기"
+                  className={`flex items-center gap-1 px-1.5 py-1 rounded-lg border hover:bg-slate-50 ${openFor === u.id ? 'border-blue-400' : 'border-slate-200'}`}>
+                  <span className="w-5 h-5 rounded" style={{ backgroundColor: current }} />
+                  <ChevronDown size={14} className="text-slate-400" />
+                </button>
                 <input type="color" key={current} defaultValue={current} onChange={e => pickLater(u, e.target.value)} title="직접 지정"
                   className="w-7 h-7 rounded cursor-pointer border border-slate-200 p-0" />
                 {u.worklog_color && (
-                  <button onClick={() => pick(u, null)} className="text-xs text-slate-400 hover:text-slate-600 ml-1">기본으로</button>
+                  <button onClick={() => pick(u, null)} className="text-xs text-slate-400 hover:text-slate-600">기본으로</button>
                 )}
               </div>
+              {openFor === u.id && (
+                <div className="pb-3 overflow-x-auto">
+                  <div className="inline-grid gap-0.5 p-2 rounded-lg border border-slate-200 bg-white shadow-sm"
+                    style={{ gridTemplateColumns: `repeat(${PICKER_ROWS[0].length}, 1.25rem)` }}>
+                    {PICKER_ROWS.flat().map((c, i) => (
+                      <button key={i} onClick={() => pick(u, c)} title={c}
+                        className={`w-5 h-5 transition-transform ${current === c ? 'ring-2 ring-offset-1 ring-slate-800' : 'hover:scale-125'}`}
+                        style={{ backgroundColor: c }} />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )
         })}
