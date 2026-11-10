@@ -185,9 +185,9 @@ export default function WorkLogPage() {
   return (
     <div className="min-h-screen bg-slate-100">
       {/* 헤더 */}
-      <div className="bg-white border-b border-slate-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+      <div className="bg-white border-b border-slate-200 px-3 sm:px-6 py-3 sm:py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4">
             <button onClick={goHub} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-800 hover:bg-slate-50 transition-colors">
               <Home size={16} />
               메인으로
@@ -197,8 +197,8 @@ export default function WorkLogPage() {
                 <CalendarDays size={24} className="text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-slate-800">업무일지 캘린더</h1>
-                <p className="text-sm text-slate-500">{canManage ? '전체 직원 업무일지' : '내 업무일지'}</p>
+                <h1 className="text-xl sm:text-2xl font-bold text-slate-800">업무일지 캘린더</h1>
+                <p className="hidden sm:block text-sm text-slate-500">{canManage ? '전체 직원 업무일지' : '내 업무일지'}</p>
               </div>
             </div>
           </div>
@@ -210,7 +210,7 @@ export default function WorkLogPage() {
         </div>
       </div>
 
-      <div className="max-w-screen-2xl mx-auto px-6 py-6">
+      <div className="max-w-screen-2xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
         {/* 툴바 */}
         <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
           <div className="flex items-center gap-2">
@@ -246,12 +246,12 @@ export default function WorkLogPage() {
             {loading && <div className="w-4 h-4 border-2 border-slate-200 border-t-blue-500 rounded-full animate-spin ml-2" />}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <form onSubmit={runSearch} className="relative">
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input value={searchText} onChange={e => setSearchText(e.target.value)}
                 placeholder={canManage ? '업무 내용 검색 (전체 직원)' : '내 업무 내용 검색'} maxLength={50}
-                className="border border-slate-200 rounded-lg pl-8 pr-7 py-1.5 text-sm bg-white w-56 focus:outline-none focus:border-orange-400" />
+                className="border border-slate-200 rounded-lg pl-8 pr-7 py-1.5 text-sm bg-white w-44 sm:w-56 focus:outline-none focus:border-orange-400" />
               {searchText && (
                 <button type="button" onClick={clearSearch} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" title="검색 지우기">
                   <X size={14} />
@@ -367,7 +367,7 @@ function MonthView({ month, range, byDay, today, onDayClick, onOpenWeek, onMore,
             <div
               key={key}
               onClick={() => onDayClick(key)}
-              className={`min-h-[110px] border-b border-r border-slate-100 p-1.5 cursor-pointer hover:bg-blue-50/40 transition-colors ${inMonth ? '' : 'bg-slate-50/70'}`}
+              className={`min-h-[80px] sm:min-h-[110px] border-b border-r border-slate-100 p-1.5 cursor-pointer hover:bg-blue-50/40 transition-colors ${inMonth ? '' : 'bg-slate-50/70'}`}
             >
               <div className={`text-xs font-medium mb-1 ${inMonth ? '' : 'opacity-40'}`}>
                 <span className={key === today
@@ -411,12 +411,12 @@ function AuthorList({ logs, onPick, onMore }) {
 function WeekView({ weekStart, byDay, today, onDayClick, onLogClick }) {
   const days = Array.from({ length: 5 }, (_, i) => weekStart.add(i, 'day')) // 월~금 (주말 제외)
   return (
-    <div className="grid grid-cols-5 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
       {days.map(d => {
         const key = d.format(DATE_FMT)
         const dayLogs = byDay[key] || []
         return (
-          <div key={key} className={`bg-white rounded-xl border shadow-sm flex flex-col min-h-[420px] ${key === today ? 'border-blue-400' : 'border-slate-200'}`}>
+          <div key={key} className={`bg-white rounded-xl border shadow-sm flex flex-col min-h-[160px] lg:min-h-[420px] ${key === today ? 'border-blue-400' : 'border-slate-200'}`}>
             <div className="px-3 py-2 border-b border-slate-100 text-sm font-semibold text-slate-700">
               {MONTH_WEEKDAYS[d.day()]} <span className="font-normal text-slate-500">{d.format('M/D')}</span>
               {key === today && <span className="ml-1.5 text-[10px] bg-blue-500 text-white px-1.5 py-0.5 rounded-full">오늘</span>}
