@@ -11,7 +11,7 @@ import { setWorkLogUserColor, getWorkLogs, getWorkLogUsers, getWorkLogMissing, s
 
 const DATE_FMT = 'YYYY-MM-DD'
 const MONTH_WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
-const MAX_NAMES = 3 // 월간 칸에 표시할 최대 작성자 수
+const MAX_NAMES = 3 // 월간 칸에 표시할 최대 막대 줄 수 (넘치면 '외 N명')
 
 const mondayOf = (d) => d.subtract((d.day() + 6) % 7, 'day').startOf('day')
 
@@ -361,11 +361,11 @@ function MissingBanner({ day, users }) {
   )
 }
 
-// 연속일정 막대: 날짜 줄(24px) 바로 아래부터 한 줄씩
+// 월간 막대(연속일정·하루짜리 공통): 날짜 줄(24px) 바로 아래부터 한 줄씩
 const BAR_TOP = 30 // px — 칸 위 여백(6) + 날짜 줄(24)
 const BAR_H = 18   // px — 막대 한 줄 높이
 
-// 이 주에 걸친 연속일정 → 열 위치/길이 + 겹치지 않게 줄(lane) 배정
+// 이 주에 걸친 일지 → 열 위치/길이 + 겹치지 않게 줄(lane) 배정
 function weekBars(multi, week) {
   const first = week[0], last = week[week.length - 1]
   const bars = multi
@@ -397,8 +397,9 @@ function MonthView({ month, range, byDay, today, onDayClick, onOpenWeek, onMore,
   for (let d = range[0]; !d.isAfter(range[1]); d = d.add(1, 'day')) days.push(d)
   const weeks = []
   for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7))
-  // 연속일정은 칸마다 이름 대신 주 단위 막대로 (하루짜리만 칸에 이름)
-  const multi = [...new Map(Object.values(byDay).flat().filter(l => l.is_multi_day).map(l => [l.id, l])).values()]
+  // 막대로 그릴 것: 연속일정은 일지마다, 하루짜리는 사람당 하루 1개 (작성 여부는 모든 사용자에게 공개)
+  const items = [...new Map(Object.values(byDay).flat()
+    .map(l => [l.is_multi_day ? `m${l.id}` : `s${l.user_id}|${l.start_date}`, l])).values()]
 
   return (
     <div ref={boxRef} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -409,19 +410,20 @@ function MonthView({ month, range, byDay, today, onDayClick, onOpenWeek, onMore,
       </div>
       <div ref={gridRef} style={dragStyle(drag)}>
         {weeks.map(week => {
-          const { bars, lanes } = weekBars(multi, week)
+          const { bars } = weekBars(items, week)
+          const hidden = Array(7).fill(0) // 줄이 넘쳐 안 보이는 막대 수 (칸별)
+          for (const b of bars) if (b.lane >= MAX_NAMES) for (let i = b.col; i < b.col + b.span; i++) hidden[i]++
           return (
             <div key={week[0].format(DATE_FMT)} className="relative grid grid-cols-7">
-              {week.map(d => {
+              {week.map((d, i) => {
                 const key = d.format(DATE_FMT)
-                const dayLogs = (byDay[key] || []).filter(l => !l.is_multi_day)
                 const inMonth = d.month() === month.month()
                 const dow = d.day()
                 return (
                   <div
                     key={key}
                     onClick={() => onDayClick(key)}
-                    className={`min-h-[80px] sm:min-h-[110px] border-b border-r border-slate-100 p-1.5 cursor-pointer hover:bg-blue-50/40 transition-colors ${inMonth ? '' : 'bg-slate-50/70'}`}
+                    className={`min-h-[90px] sm:min-h-[110px] border-b border-r border-slate-100 p-1.5 cursor-pointer hover:bg-blue-50/40 transition-colors ${inMonth ? '' : 'bg-slate-50/70'}`}
                   >
                     <div className={`h-6 mb-1 text-xs font-medium ${inMonth ? '' : 'opacity-40'}`}>
                       <span className={key === today
@@ -430,21 +432,26 @@ function MonthView({ month, range, byDay, today, onDayClick, onOpenWeek, onMore,
                         {d.date()}
                       </span>
                     </div>
-                    {/* 위에 깔린 연속일정 막대 줄 수만큼 비움 */}
-                    <div style={{ marginTop: lanes * BAR_H }}>
-                      <AuthorList logs={dayLogs} onPick={userId => onOpenWeek(key, userId)} onMore={onMore && (() => onMore(key))} />
-                    </div>
+                    {hidden[i] > 0 && (
+                      <div style={{ marginTop: MAX_NAMES * BAR_H }}>
+                        {onMore
+                          ? <button onClick={e => { e.stopPropagation(); onMore(key) }} className="text-[11px] text-slate-500 hover:underline px-1">외 {hidden[i]}명 · 일간 보기</button>
+                          : <span className="text-[11px] text-slate-400 px-1">외 {hidden[i]}명</span>}
+                      </div>
+                    )}
                   </div>
                 )
               })}
-              {bars.map(({ log, col, span, lane, isStart, isEnd }) => {
+              {bars.filter(b => b.lane < MAX_NAMES).map(({ log, col, span, lane, isStart, isEnd }) => {
                 const c = userColor(log.user_id, log.user_color)
                 return (
                   <button
                     key={log.id}
                     onClick={e => { e.stopPropagation(); onOpenWeek(log.start_date, log.user_id) }}
-                    title={`${userLabel(log)} · ${dayjs(log.start_date).format('M/D')} ~ ${dayjs(log.end_date).format('M/D')}`}
-                    className={`absolute truncate text-left text-[11px] px-1.5 hover:brightness-95 ${isStart ? 'rounded-l' : ''} ${isEnd ? 'rounded-r' : ''}`}
+                    title={log.is_multi_day
+                      ? `${userLabel(log)} · ${dayjs(log.start_date).format('M/D')} ~ ${dayjs(log.end_date).format('M/D')}`
+                      : userLabel(log)}
+                    className={`absolute truncate text-left text-[11px] font-medium px-1.5 hover:brightness-95 ${isStart ? 'rounded-l' : ''} ${isEnd ? 'rounded-r' : ''}`}
                     style={{
                       top: BAR_TOP + lane * BAR_H, height: BAR_H - 2, lineHeight: `${BAR_H - 2}px`,
                       left: `calc(${(col / 7) * 100}% + ${isStart ? 4 : 0}px)`,
@@ -461,37 +468,6 @@ function MonthView({ month, range, byDay, today, onDayClick, onOpenWeek, onMore,
         })}
       </div>
     </div>
-  )
-}
-
-// 날짜별 작성자 이름(직급), 넘치면 "외 N명" — 작성 여부는 모든 사용자에게 공개
-function AuthorList({ logs, onPick, onMore }) {
-  const authors = [...new Map(logs.map(l => [l.user_id, l])).values()]
-  const shown = authors.length > MAX_NAMES ? authors.slice(0, MAX_NAMES - 1) : authors
-  const rest = authors.length - shown.length
-  if (!authors.length) return null
-  return (
-    <>
-    <button onClick={e => { if (onMore) { e.stopPropagation(); onMore() } }}
-      className="sm:hidden block w-full text-center text-[11px] font-semibold px-1 py-0.5 rounded bg-orange-50 text-orange-700">
-      {authors.length}명
-    </button>
-    <div className="max-sm:hidden space-y-0.5">
-      {shown.map(a => (
-        <button
-          key={a.user_id}
-          onClick={e => { e.stopPropagation(); onPick(a.user_id) }}
-          className="block w-full text-left truncate text-[11px] px-1.5 py-0.5 rounded hover:brightness-95"
-          style={{ backgroundColor: userColor(a.user_id, a.user_color), color: textOn(userColor(a.user_id, a.user_color)) }}
-        >
-          {userLabel(a)}
-        </button>
-      ))}
-      {rest > 0 && (onMore
-        ? <button onClick={e => { e.stopPropagation(); onMore() }} className="text-[11px] text-orange-600 hover:underline px-1.5">외 {rest}명 · 일간 보기</button>
-        : <div className="text-[11px] text-slate-400 px-1.5">외 {rest}명</div>)}
-    </div>
-    </>
   )
 }
 
