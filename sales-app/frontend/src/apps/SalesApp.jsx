@@ -92,8 +92,8 @@ export default function SalesApp() {
     <div className="h-screen overflow-hidden bg-slate-50 flex flex-col">
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="px-6 py-4 flex items-center justify-between bg-white border-b border-slate-200">
-          <div className="flex items-center gap-4">
+        <div className="px-3 sm:px-6 py-3 sm:py-4 flex flex-wrap items-center justify-between gap-3 bg-white border-b border-slate-200">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4">
             <button
               onClick={goToMainHub}
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-800 hover:bg-slate-50 transition-colors">
@@ -105,15 +105,15 @@ export default function SalesApp() {
                 <TrendingUp size={24} className="text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-slate-800">Sales Pipeline</h1>
-                <p className="text-sm text-slate-500">영업 파이프라인 관리</p>
+                <h1 className="text-xl sm:text-2xl font-bold text-slate-800">Sales Pipeline</h1>
+                <p className="hidden sm:block text-sm text-slate-500">영업 파이프라인 관리</p>
               </div>
             </div>
             <a
               href="/board"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-3 px-6 py-3 rounded-lg bg-gradient-to-r from-green-500 to-blue-500 text-white hover:from-green-600 hover:to-blue-600 transition-all shadow-md hover:shadow-lg text-base font-semibold">
+              className="flex items-center gap-3 px-4 py-2 sm:px-6 sm:py-3 rounded-lg bg-gradient-to-r from-green-500 to-blue-500 text-white hover:from-green-600 hover:to-blue-600 transition-all shadow-md hover:shadow-lg text-base font-semibold">
               <MessageSquare size={22} />
               Dashboard
             </a>
@@ -132,7 +132,7 @@ export default function SalesApp() {
           </div>
 
           {/* Right side controls */}
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4">
             {/* 시트 뷰 토글 */}
             <button
               onClick={() => setSheetViewMode(!sheetViewMode)}
@@ -178,12 +178,12 @@ export default function SalesApp() {
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-slate-300 bg-white flex-shrink-0">
+        <div className="flex border-b border-slate-300 bg-white flex-shrink-0 overflow-x-auto">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-6 py-3 font-medium transition-colors border-b-2 ${
+              className={`flex items-center gap-2 px-4 sm:px-6 py-3 whitespace-nowrap font-medium transition-colors border-b-2 ${
                 activeTab === tab.id
                   ? 'text-green-600 border-green-600 bg-green-50'
                   : 'text-slate-600 border-transparent hover:text-slate-800 hover:bg-slate-50'

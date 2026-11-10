@@ -369,7 +369,7 @@ export default function PurchasesTab({ year }) {
     <div className="space-y-4">
       {/* Stats */}
       {stats && (
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-3">
             <div className="text-xs text-blue-700 mb-1">전체 PO</div>
             <div className="text-xl font-bold text-blue-900">{stats.total_po_count || 0}</div>

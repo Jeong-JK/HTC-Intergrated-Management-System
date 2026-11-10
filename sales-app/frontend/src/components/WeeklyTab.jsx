@@ -417,7 +417,7 @@ export default function WeeklyTab({ year, isActive, hideDone }) {
   return (
     <div className="space-y-6">
       {/* Info & Add Button */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 flex-none" style={{ maxWidth: '400px' }}>
           <div className="flex items-center gap-2">
             <Calendar className="text-blue-600" size={16} />
@@ -435,7 +435,7 @@ export default function WeeklyTab({ year, isActive, hideDone }) {
 
       {/* 수동 추가 모달 */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-green-50">
               <h2 className="text-lg font-bold text-slate-800">수동 추가 (재고 납품)</h2>

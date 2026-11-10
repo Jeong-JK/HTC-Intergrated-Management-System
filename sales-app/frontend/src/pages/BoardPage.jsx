@@ -154,10 +154,10 @@ export default function BoardPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50">
-      <div className="max-w-5xl mx-auto p-6">
+      <div className="max-w-5xl mx-auto p-3 sm:p-6">
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4">
             <button
               onClick={goBack}
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-800 hover:bg-slate-50 transition-colors">
@@ -177,7 +177,7 @@ export default function BoardPage() {
         </div>
 
         {/* Body */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
+        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
           {loading ? (
             <div className="text-center py-12 text-slate-500">로딩 중...</div>
           ) : showWriteForm ? (

@@ -321,7 +321,7 @@ export default function PurchaseModal({ purchase, onSave, onClose }) {
             {/* 기본 정보 */}
             <div className="bg-slate-50 p-4 rounded-lg">
               <h3 className="font-semibold text-slate-700 mb-3">기본 정보</h3>
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">PO 번호</label>
                   <input
@@ -449,9 +449,9 @@ export default function PurchaseModal({ purchase, onSave, onClose }) {
                         onChange={() => toggleItemSelection(idx)}
                         className="w-4 h-4 mt-6"
                       />
-                      <div className="flex-1 space-y-3">
+                      <div className="flex-1 space-y-3 overflow-x-auto lg:overflow-visible">
                         {/* 기본 품목 정보 */}
-                        <div className="grid grid-cols-11 gap-2 items-end">
+                        <div className="grid grid-cols-11 gap-2 items-end min-w-[880px] lg:min-w-0">
                       <div>
                         <label className="block text-xs font-medium text-slate-700 mb-1">공급사 *</label>
                         <Combobox
