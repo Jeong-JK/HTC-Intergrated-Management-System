@@ -7,7 +7,7 @@ import { Modal, Btn, Field, inputCls } from '../components/Common.jsx'
 import DatePicker from '../components/DatePicker.jsx'
 import { goHub } from '../site.js'
 import { TitleInput, useMonthWheel, dragStyle } from '../components/MonthNav.jsx'
-import { getWorkLogs, getWorkLogUsers, getWorkLogMissing, searchWorkLogs, createWorkLog, updateWorkLog, deleteWorkLog } from '../api.js'
+import { setWorkLogUserColor, getWorkLogs, getWorkLogUsers, getWorkLogMissing, searchWorkLogs, createWorkLog, updateWorkLog, deleteWorkLog } from '../api.js'
 
 const DATE_FMT = 'YYYY-MM-DD'
 const MONTH_WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
@@ -23,6 +23,14 @@ const weekLabel = (weekStart) => {
 
 const dayLabel = (d) => `${d.format('M/D')} (${MONTH_WEEKDAYS[d.day()]})`
 
+// 사용자별 캘린더 색: 지정색(worklog_color) 없으면 id로 기본 팔레트에서
+const PALETTE = ['#3b82f6', '#ef4444', '#22c55e', '#f97316', '#a855f7', '#14b8a6', '#ec4899', '#eab308', '#6366f1', '#0ea5e9', '#84cc16', '#64748b']
+const userColor = (id, color) => color || PALETTE[id % PALETTE.length]
+// 배경 밝기에 맞춘 글자색 (밝으면 검정, 어두우면 흰색)
+const textOn = (hex) => {
+  const n = parseInt(hex.slice(1), 16)
+  return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255 > 0.62 ? '#1e293b' : '#ffffff'
+}
 const userLabel = (u) => [u.name ?? u.user_name, u.position ?? u.user_position].filter(Boolean).join(' ')
 
 // 기간형 일지를 날짜별로 펼침: { 'YYYY-MM-DD': [log, ...] }
@@ -63,6 +71,7 @@ export default function WorkLogPage() {
   const [loading, setLoading] = useState(false)
   const [editing, setEditing] = useState(null) // null | { log } | { date }
   const [reloadKey, setReloadKey] = useState(0)
+  const [showColors, setShowColors] = useState(false) // 직원별 색상 설정 창
   const [searchText, setSearchText] = useState('') // 입력 중인 검색어
   const [search, setSearch] = useState(null) // null | { q, rows, truncated, loading }
 
@@ -267,6 +276,7 @@ export default function WorkLogPage() {
                 {users.map(u => <option key={u.id} value={u.id}>{userLabel(u)}</option>)}
               </select>
             )}
+            {canManage && <Btn onClick={() => setShowColors(true)}>색상</Btn>}
             {/* 보기 전환: 일간/상세는 다른 사람 내용을 보는 화면이라 관리자/업무일지관리자만 */}
             <div className="flex rounded-lg border border-slate-200 bg-white overflow-hidden text-sm">
               {[['month', '월간'], ['week', '주간'], ...(canManage ? [['day', '일간'], ['list', '상세']] : [])].map(([v, label]) => (
@@ -305,6 +315,11 @@ export default function WorkLogPage() {
         )}
         </>)}
       </div>
+
+      {showColors && (
+        <ColorModal users={users} onClose={() => setShowColors(false)}
+          onSaved={() => { getWorkLogUsers().then(r => setUsers(r.data.data)).catch(() => {}); setReloadKey(k => k + 1) }} />
+      )}
 
       {canWrite && !editing && (
         <button onClick={() => setEditing({ date: today })} title="업무일지 작성"
@@ -409,7 +424,8 @@ function AuthorList({ logs, onPick, onMore }) {
         <button
           key={a.user_id}
           onClick={e => { e.stopPropagation(); onPick(a.user_id) }}
-          className="block w-full text-left truncate text-[11px] px-1.5 py-0.5 rounded bg-orange-50 text-orange-700 hover:bg-orange-100"
+          className="block w-full text-left truncate text-[11px] px-1.5 py-0.5 rounded hover:brightness-95"
+          style={{ backgroundColor: userColor(a.user_id, a.user_color), color: textOn(userColor(a.user_id, a.user_color)) }}
         >
           {userLabel(a)}
         </button>
@@ -441,6 +457,7 @@ function WeekView({ weekStart, byDay, today, onDayClick, onLogClick }) {
                   key={log.id}
                   onClick={e => { e.stopPropagation(); onLogClick(log) }}
                   className="rounded-lg border border-slate-200 bg-white p-2 hover:border-blue-300 hover:shadow-sm transition-all"
+                  style={{ borderLeft: `4px solid ${userColor(log.user_id, log.user_color)}` }}
                 >
                   <LogItems log={log} />
                 </div>
@@ -486,7 +503,10 @@ function DayView({ logs, onLogClick }) {
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
       {byUser.map(userLogs => (
         <div key={userLogs[0].user_id} className="bg-white rounded-xl border border-slate-200 shadow-sm">
-          <div className="px-4 py-2.5 border-b border-slate-100 font-semibold text-slate-800">{userLabel(userLogs[0])}</div>
+          <div className="px-4 py-2.5 border-b border-slate-100 font-semibold text-slate-800 flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: userColor(userLogs[0].user_id, userLogs[0].user_color) }} />
+            {userLabel(userLogs[0])}
+          </div>
           <div className="p-3 space-y-2">
             {userLogs.map(log => (
               <div key={log.id} onClick={() => onLogClick(log)}
@@ -707,6 +727,58 @@ function WorkLogModal({ log, date, me, isAdmin, canEditOwn, canDeleteOwn, users,
             )}
           </div>
         </Field>
+      </div>
+    </Modal>
+  )
+}
+
+// 관리자/업무일지관리자: 직원별 캘린더 색 지정 (고르면 바로 저장)
+function ColorModal({ users, onClose, onSaved }) {
+  const [saving, setSaving] = useState(null)
+  const timer = useRef(null)
+
+  const pick = async (u, color) => {
+    setSaving(u.id)
+    try {
+      await setWorkLogUserColor(u.id, color)
+      onSaved()
+    } catch (e) {
+      alert(e.response?.data?.detail || '색상을 저장하지 못했습니다')
+    } finally {
+      setSaving(null)
+    }
+  }
+  // 직접 지정: 색상 창을 끄는 동안 값이 계속 바뀌므로 멈춘 뒤 한 번만 저장
+  const pickLater = (u, color) => {
+    clearTimeout(timer.current)
+    timer.current = setTimeout(() => pick(u, color), 500)
+  }
+
+  return (
+    <Modal title="직원별 캘린더 색상" sub="지정하지 않으면 기본 색이 자동으로 정해집니다" onClose={onClose} size="lg"
+      footer={<Btn onClick={onClose}>닫기</Btn>}>
+      <div className="divide-y divide-slate-100">
+        {users.map(u => {
+          const current = userColor(u.id, u.worklog_color)
+          return (
+            <div key={u.id} className={`flex flex-wrap items-center gap-3 py-2.5 ${saving === u.id ? 'opacity-50' : ''}`}>
+              <span className="w-28 flex-shrink-0 text-sm font-medium text-slate-800 truncate">{userLabel(u)}</span>
+              <span className="px-2 py-0.5 rounded text-[11px] font-medium" style={{ backgroundColor: current, color: textOn(current) }}>{u.name}</span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {PALETTE.map(c => (
+                  <button key={c} onClick={() => pick(u, c)} title={c}
+                    className={`w-6 h-6 rounded-full border-2 ${current === c ? 'border-slate-800' : 'border-white shadow'}`}
+                    style={{ backgroundColor: c }} />
+                ))}
+                <input type="color" key={current} defaultValue={current} onChange={e => pickLater(u, e.target.value)} title="직접 지정"
+                  className="w-7 h-7 rounded cursor-pointer border border-slate-200 p-0" />
+                {u.worklog_color && (
+                  <button onClick={() => pick(u, null)} className="text-xs text-slate-400 hover:text-slate-600 ml-1">기본으로</button>
+                )}
+              </div>
+            </div>
+          )
+        })}
       </div>
     </Modal>
   )

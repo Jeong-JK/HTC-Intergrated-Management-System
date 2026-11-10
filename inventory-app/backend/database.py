@@ -235,13 +235,14 @@ CREATE TABLE IF NOT EXISTS maintenance (
     updated_at       DATETIME    DEFAULT NOW() ON UPDATE NOW()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 업무일지 권한 (기존 users 테이블에 컬럼 추가, 이미 있으면 무시)
+-- 업무일지 권한 + 캘린더 색(#rrggbb, 없으면 화면에서 기본 팔레트) — 기존 users 테이블에 컬럼 추가, 이미 있으면 무시
 ALTER TABLE users
     ADD COLUMN IF NOT EXISTS can_access_worklog BOOLEAN DEFAULT FALSE,
     ADD COLUMN IF NOT EXISTS can_write_worklog  BOOLEAN DEFAULT FALSE,
     ADD COLUMN IF NOT EXISTS can_edit_worklog   BOOLEAN DEFAULT FALSE,
     ADD COLUMN IF NOT EXISTS can_delete_worklog BOOLEAN DEFAULT FALSE,
-    ADD COLUMN IF NOT EXISTS can_manage_worklog BOOLEAN DEFAULT FALSE;
+    ADD COLUMN IF NOT EXISTS can_manage_worklog BOOLEAN DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS worklog_color      VARCHAR(7) DEFAULT NULL;
 """
 
 def init_db():

@@ -1,4 +1,5 @@
 """HTC Inventory — 업무일지 캘린더 Router"""
+import re
 from datetime import date
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Request
@@ -26,6 +27,13 @@ class WorkLogSave(BaseModel):
     end_date: Optional[date] = None
     items: List[str]
     user_id: Optional[int] = None  # 관리자 대리 작성 시 대상 직원
+
+
+class ColorSave(BaseModel):
+    color: Optional[str] = None  # None이면 기본 팔레트로
+
+
+HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
 def has_perm(user, field):
@@ -84,8 +92,24 @@ def list_users(request: Request):
         raise HTTPException(status_code=403, detail="권한이 없습니다")
     with db_cursor() as cur:
         # admin 계정은 다른 사용자 목록에서 숨김 (본인은 표시)
-        cur.execute("SELECT id, name, position FROM users WHERE user_id <> %s OR id = %s ORDER BY name", (HIDDEN_LOGIN_ID, user["id"]))
+        cur.execute("SELECT id, name, position, worklog_color FROM users WHERE user_id <> %s OR id = %s ORDER BY name", (HIDDEN_LOGIN_ID, user["id"]))
         return {"data": cur.fetchall()}
+
+
+@router.put("/work-logs/users/{user_id}/color")
+def set_user_color(user_id: int, data: ColorSave, request: Request):
+    """직원별 캘린더 색 지정 (관리자/업무일지관리자)"""
+    user = require_perm(request, "can_access_worklog")
+    if not has_perm(user, "can_manage_worklog"):
+        raise HTTPException(status_code=403, detail="권한이 없습니다")
+    if data.color is not None and not HEX_COLOR.match(data.color):
+        raise HTTPException(status_code=400, detail="색상 형식이 올바르지 않습니다")
+    with db_cursor() as cur:
+        cur.execute("SELECT id FROM users WHERE id = %s", (user_id,))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+        cur.execute("UPDATE users SET worklog_color = %s WHERE id = %s", (data.color.lower() if data.color else None, user_id))
+    return {"message": "색상이 저장되었습니다"}
 
 
 @router.get("/work-logs/missing")
@@ -115,7 +139,7 @@ def search_work_logs(request: Request, q: str):
     like = "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
     sql = """SELECT i.id, i.content, i.item_order, m.id AS master_id, m.user_id,
                     m.start_date, m.end_date, m.is_multi_day,
-                    u.name AS user_name, u.position AS user_position
+                    u.name AS user_name, u.position AS user_position, u.worklog_color AS user_color
              FROM work_log_items i
              JOIN work_log_masters m ON i.master_id = m.id
              JOIN users u ON m.user_id = u.id
@@ -145,7 +169,7 @@ def list_work_logs(request: Request, start: date, end: date, user_id: Optional[i
 
     sql = """SELECT m.id, m.user_id, m.start_date, m.end_date, m.is_multi_day,
                     m.created_at, m.updated_at,
-                    u.name AS user_name, u.position AS user_position
+                    u.name AS user_name, u.position AS user_position, u.worklog_color AS user_color
              FROM work_log_masters m
              JOIN users u ON m.user_id = u.id
              WHERE m.start_date <= %s AND m.end_date >= %s"""

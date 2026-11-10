@@ -54,6 +54,9 @@ CASES = [
     ("GET", "/api/work-logs/search?q=x", "staff", 403),   # 업무일지 접근권한 없음
     ("GET", "/api/work-logs/search?q=x", "writer", "DB"), # 접근권한만 있어도 본인 것 검색 가능
     ("GET", "/api/maintenance", None, 401),
+    ("PUT", "/api/work-logs/users/1/color", "staff", 403),   # 업무일지 접근권한 없음
+    ("PUT", "/api/work-logs/users/1/color", "writer", 403),  # 관리 권한 없음
+    ("PUT", "/api/work-logs/users/1/color", "admin", "DB"),
     ("PUT", "/api/maintenance/sales", "staff", 403),
 ]
 

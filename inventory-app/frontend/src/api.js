@@ -127,6 +127,7 @@ export const deleteReadNotifications         = ()   => api.delete('/notification
 // Work Logs (업무일지 캘린더)
 export const getWorkLogs     = (params) => api.get('/work-logs', { params })
 export const getWorkLogUsers = ()       => api.get('/work-logs/users')
+export const setWorkLogUserColor = (id, color) => api.put(`/work-logs/users/${id}/color`, { color })
 export const getWorkLogMissing = (day)  => api.get('/work-logs/missing', { params: { day } })
 export const searchWorkLogs  = (q)      => api.get('/work-logs/search', { params: { q } })
 export const createWorkLog   = (data)   => api.post('/work-logs', data)
