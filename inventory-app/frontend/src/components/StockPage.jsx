@@ -354,7 +354,7 @@ function LicenseBulkModal({ selectedIds, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
         <h3 className="text-lg font-semibold text-slate-800 mb-4">
           라이센스 일괄 변경 <span className="text-green-500">({selectedIds.size}개)</span>
@@ -428,7 +428,7 @@ function LocationBulkModal({ selectedIds, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
         <h3 className="text-lg font-semibold text-slate-800 mb-4">
           위치 일괄 변경 <span className="text-blue-500">({selectedIds.size}개)</span>

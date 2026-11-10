@@ -333,7 +333,7 @@ export default function OutRental() {
       {/* 공통 정보 */}
       <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <h3 className="text-sm font-semibold text-slate-700 mb-3">대여 정보</h3>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Field label="업체명 *">
             <CompanyAutocomplete
               value={header.borrower}

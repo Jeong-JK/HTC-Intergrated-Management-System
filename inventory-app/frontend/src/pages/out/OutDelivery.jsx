@@ -337,7 +337,7 @@ export default function OutDelivery() {
         <h3 className="text-sm font-semibold text-slate-700 mb-3">납품 정보</h3>
         <div className="space-y-3">
           {/* 첫 번째 줄: 업체명 | 담당자명 | 전화번호 */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Field label="업체명 *">
               <CompanyAutocomplete
                 value={header.client}
@@ -383,7 +383,7 @@ export default function OutDelivery() {
           </div>
 
           {/* 두 번째 줄: 프로젝트명 | 납품일 | 납품구분 */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Field label="프로젝트명">
               <input
                 type="text"

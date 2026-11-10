@@ -132,7 +132,7 @@ function Sidebar({ open, setOpen }) {
 }
 
 export default function InventoryApp() {
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768)
 
   useEffect(() => {
     document.title = 'HTC 재고관리'
@@ -141,8 +141,8 @@ export default function InventoryApp() {
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-bg">
       {/* 헤더: Sales Pipeline과 같은 배치 (메인으로 + 메인허브 카드 마크) */}
-      <header className="px-6 py-4 flex items-center justify-between bg-white border-b border-slate-200">
-        <div className="flex items-center gap-4">
+      <header className="pl-16 pr-3 sm:pr-6 md:pl-6 py-3 sm:py-4 flex flex-wrap items-center justify-between gap-3 bg-white border-b border-slate-200">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-4">
           <button onClick={goHub} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-800 hover:bg-slate-50 transition-colors">
             <Home size={16}/>
             메인으로
@@ -152,8 +152,8 @@ export default function InventoryApp() {
               <Package size={24} className="text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-slate-800">재고관리</h1>
-              <p className="text-sm text-slate-500">장비 재고, 입출고, 대여/납품 관리</p>
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-800">재고관리</h1>
+              <p className="hidden sm:block text-sm text-slate-500">장비 재고, 입출고, 대여/납품 관리</p>
             </div>
           </div>
         </div>
@@ -161,7 +161,7 @@ export default function InventoryApp() {
       </header>
       <div className="flex flex-1 overflow-hidden">
         <Sidebar open={sidebarOpen} setOpen={setSidebarOpen}/>
-        <main className="flex-1 overflow-auto bg-bg">
+        <main className="flex-1 overflow-auto bg-bg pl-14 md:pl-0">
           <Routes>
             <Route path="/"                    element={<Dashboard/>}/>
             <Route path="/stock-detail"        element={<StockDetail/>}/>

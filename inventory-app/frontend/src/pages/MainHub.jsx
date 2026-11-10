@@ -216,20 +216,20 @@ export default function MainHub() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-200">
       {/* 헤더 */}
       <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 pt-6">
-          <div className="flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-4 sm:pt-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-4">
-              <div className="w-[100px] h-[100px] bg-white flex items-center justify-center overflow-hidden p-2">
+              <div className="w-16 h-16 sm:w-[100px] sm:h-[100px] bg-white flex items-center justify-center overflow-hidden p-2">
                 <img src={logoImg} alt="HTC Logo" className="w-full h-full object-contain" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-slate-800">HTC 통합 관리 시스템</h1>
+                <h1 className="text-xl sm:text-2xl font-bold text-slate-800">HTC 통합 관리 시스템</h1>
                 <p className="text-slate-500 text-sm mt-1">Integrated Management System</p>
               </div>
             </div>
 
             {/* 사용자 정보 및 메뉴 */}
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-4">
               {/* 사용자 정보 */}
               <div className="flex items-center gap-3 bg-slate-50 px-4 py-2 rounded-lg border border-slate-200">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center ${user?.is_admin ? 'bg-amber-100' : 'bg-blue-100'}`}>
@@ -327,8 +327,8 @@ export default function MainHub() {
           </div>
         </div>
         {/* 시간 & 환율 정보 */}
-        <div className="max-w-7xl mx-auto px-6 pb-6">
-          <div className="flex gap-4">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 pb-4 sm:pb-6">
+          <div className="flex flex-wrap gap-4">
           {/* 한국 시간 */}
           <div className="bg-slate-50 rounded-xl px-6 py-4 flex items-center gap-4">
             <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
@@ -371,7 +371,7 @@ export default function MainHub() {
       </header>
 
       {/* 메인 컨텐츠 */}
-      <main className="max-w-7xl mx-auto px-6 py-12">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 py-6 sm:py-12">
         <div className="mb-10">
           <h2 className="text-xl font-semibold text-slate-700">시스템 선택</h2>
           <p className="text-slate-500 text-sm mt-1">사용할 시스템을 선택하세요</p>
@@ -409,7 +409,7 @@ export default function MainHub() {
 
       {/* 내 정보 수정 모달 */}
       {showProfile && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl w-full max-w-md mx-4 shadow-2xl">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
               <h2 className="text-lg font-bold text-slate-800">내 정보 수정</h2>
