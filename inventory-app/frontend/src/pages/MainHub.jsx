@@ -403,16 +403,20 @@ export default function MainHub() {
               onClick={() => handleSystemClick(system)}
               className={`w-full h-full bg-white rounded-2xl border-2 ${system.borderColor} p-8 cursor-pointer transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 group text-left`}
             >
-              {/* 아이콘 */}
-              <div className={`w-16 h-16 bg-gradient-to-br ${system.color} rounded-xl flex items-center justify-center mb-6 shadow-lg group-hover:scale-110 transition-transform`}>
-                <system.icon className="text-white" size={32} />
+              {/* 아이콘 + 점검중 표시(같은 크기 정사각형) */}
+              <div className="flex items-center gap-3 mb-6">
+                <div className={`w-16 h-16 bg-gradient-to-br ${system.color} rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform`}>
+                  <system.icon className="text-white" size={32} />
+                </div>
+                {maint[system.id]?.locked && (
+                  <div className="w-16 h-16 rounded-xl border-2 border-red-500 bg-red-50 text-red-600 text-base font-bold flex items-center justify-center">
+                    점검중
+                  </div>
+                )}
               </div>
 
               {/* 타이틀 */}
               <h3 className="text-2xl font-bold text-slate-800 mb-3">{system.title}</h3>
-              {maint[system.id]?.locked && (
-                <div className="inline-block mb-3 text-xs font-semibold px-2 py-1 rounded bg-red-50 text-red-600 border border-red-200">🔧 점검중</div>
-              )}
               <p className="text-slate-500 text-sm mb-6 leading-relaxed">{system.description}</p>
 
               {/* 진입 버튼 */}
@@ -424,7 +428,7 @@ export default function MainHub() {
               <button onClick={() => setMaintTarget(system)} title="점검 모드 설정"
                 className={`absolute top-3 right-3 text-xs font-medium px-2.5 py-1 rounded-lg border transition-colors ${
                   maint[system.id]?.locked ? 'bg-red-500 border-red-500 text-white hover:bg-red-600' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
-                {maint[system.id]?.locked ? '🔒 점검중' : '🔧 점검'}
+                {maint[system.id]?.locked ? '점검 해제' : '점검'}
               </button>
             )}
             </div>
