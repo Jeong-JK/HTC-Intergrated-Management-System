@@ -171,7 +171,7 @@ export default function Dashboard() {
               <h2 className={`text-sm font-bold ${TYPE_COLORS[type]}`}>{type}</h2>
               <span className="text-xs text-slate-400">{typeRows.length}개 항목</span>
             </div>
-            <Table headers={['카테고리','품명','구분','설명','현 수량','대여중','납품예정','총 수량','비고','']}>
+            <Table cards headers={['카테고리','품명','구분','설명','현 수량','대여중','납품예정','총 수량','비고','']}>
               {loading && <Spinner/>}
               {!loading && typeRows.map((r, idx) => (
                 <tr key={idx} className="inv-row border-b border-slate-100 cursor-pointer"

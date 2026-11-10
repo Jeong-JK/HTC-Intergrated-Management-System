@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react'
+
 export function StatusBadge({ status }) {
   return <span className={`badge-${status} text-xs px-2 py-0.5 rounded-md font-medium whitespace-nowrap`}>{status}</span>
 }
@@ -35,9 +37,24 @@ export function Empty() {
   return <tr><td colSpan={99} className="text-center py-16 text-dim text-sm">데이터가 없습니다</td></tr>
 }
 
-export function Table({ headers, children }) {
+// cards: 폰 폭에선 행마다 카드("항목명 · 값" 줄)로 표시 — 칸마다 헤더 이름을 data-label로 붙임 (index.css .tbl-cards)
+export function Table({ headers, children, cards = false }) {
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!cards || !ref.current) return
+    for (const tr of ref.current.querySelectorAll('tbody tr')) {
+      let col = 0 // colSpan을 고려한 실제 열 위치
+      for (const td of tr.children) {
+        const h = headers[col]
+        td.dataset.label = td.colSpan > 1 || typeof h !== 'string' ? '' : h
+        // 값 없는 칸(빈칸, 묶음 표시 └ 〃)은 카드에서 숨김 — 체크박스/버튼 있는 칸은 유지
+        td.dataset.mhide = !td.querySelector('input,button,select') && ['', '-', '└', '〃'].includes(td.textContent.trim()) ? '1' : ''
+        col += td.colSpan || 1
+      }
+    }
+  })
   return (
-    <div className="rounded-xl border border-border overflow-hidden shadow-sm bg-white">
+    <div ref={ref} className={`rounded-xl border border-border overflow-hidden shadow-sm bg-white ${cards ? 'tbl-cards' : ''}`}>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>

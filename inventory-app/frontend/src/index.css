@@ -123,3 +123,16 @@ body {
 @media (max-width: 767px) {
   input, select, textarea { font-size: 16px !important; }
 }
+
+/* 폰 폭: <Table cards> 표를 행마다 카드로 (항목명은 Table이 붙인 data-label) */
+@media (max-width: 639px) {
+  .tbl-cards thead { display: none; }
+  .tbl-cards table, .tbl-cards tbody { display: block; }
+  .tbl-cards tr { display: block; padding: 10px 14px; border-bottom: 1px solid #e2e8f0; }
+  .tbl-cards td { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+                  padding: 3px 0 !important; text-align: right; max-width: none !important; }
+  .tbl-cards td::before { content: attr(data-label); flex-shrink: 0; color: #94a3b8; font-size: 12px; text-align: left; }
+  .tbl-cards td[data-label=""] { justify-content: flex-start; text-align: left; }
+  .tbl-cards td[data-label=""]::before { content: none; }
+  .tbl-cards td[data-mhide="1"] { display: none; }
+}

@@ -133,6 +133,9 @@ function Sidebar({ open, setOpen }) {
 
 export default function InventoryApp() {
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768)
+  const { pathname } = useLocation()
+  // 폰에선 메뉴가 화면을 덮으므로 페이지를 고르면 닫음
+  useEffect(() => { if (window.innerWidth < 768) setSidebarOpen(false) }, [pathname])
 
   useEffect(() => {
     document.title = 'HTC 재고관리'

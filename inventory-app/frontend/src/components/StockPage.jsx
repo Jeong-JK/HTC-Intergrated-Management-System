@@ -201,7 +201,7 @@ export default function StockPage({ itemType, categories, showDesc=false, showQu
         )}
       </div>
 
-      <Table headers={[
+      <Table cards headers={[
           <input key="chk" type="checkbox" checked={filtered.length > 0 && selectedIds.size === filtered.length}
             onChange={toggleSelectAll} className="w-4 h-4 rounded accent-blue-500"/>,
           '위치','카테고리','품명', showDesc ? '설명' : 'Serial / IP', showQuantity ? '총 수량' : null, showQuantity ? '대여가능/대여중' : null,'상태','매입일','단가 / 환율','비고',''

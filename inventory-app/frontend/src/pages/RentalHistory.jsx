@@ -749,7 +749,7 @@ export default function RentalHistory() {
       </div>
 
       <div className="rental-history-table">
-        <Table headers={[
+        <Table cards headers={[
           <input type="checkbox" checked={selectedIds.size === unreturned.length && unreturned.length > 0} onChange={toggleSelectAll} />,
           '확인', '업체명', '담당자', '품명', 'Serial/IP', '수량', '대여일', '반납예정', '실제반납', '비고', '', ''
         ]}>
