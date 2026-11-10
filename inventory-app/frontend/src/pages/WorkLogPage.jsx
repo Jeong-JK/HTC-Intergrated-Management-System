@@ -361,12 +361,44 @@ function MissingBanner({ day, users }) {
   )
 }
 
+// 연속일정 막대: 날짜 줄(24px) 바로 아래부터 한 줄씩
+const BAR_TOP = 30 // px — 칸 위 여백(6) + 날짜 줄(24)
+const BAR_H = 18   // px — 막대 한 줄 높이
+
+// 이 주에 걸친 연속일정 → 열 위치/길이 + 겹치지 않게 줄(lane) 배정
+function weekBars(multi, week) {
+  const first = week[0], last = week[week.length - 1]
+  const bars = multi
+    .map(log => {
+      const s = dayjs(log.start_date), e = dayjs(log.end_date)
+      if (e.isBefore(first, 'day') || s.isAfter(last, 'day')) return null
+      const from = s.isBefore(first, 'day') ? first : s
+      const to = e.isAfter(last, 'day') ? last : e
+      return { log, col: from.diff(first, 'day'), span: to.diff(from, 'day') + 1,
+               isStart: !s.isBefore(first, 'day'), isEnd: !e.isAfter(last, 'day') }
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.col - b.col || b.span - a.span)
+  const laneEnds = [] // 줄마다 마지막으로 차지한 열
+  for (const bar of bars) {
+    let lane = laneEnds.findIndex(endCol => endCol < bar.col)
+    if (lane < 0) lane = laneEnds.length
+    laneEnds[lane] = bar.col + bar.span - 1
+    bar.lane = lane
+  }
+  return { bars, lanes: laneEnds.length }
+}
+
 function MonthView({ month, range, byDay, today, onDayClick, onOpenWeek, onMore, onWheelStep }) {
   const boxRef = useRef(null)
   const gridRef = useRef(null)
   const drag = useMonthWheel(boxRef, gridRef, onWheelStep)
   const days = []
   for (let d = range[0]; !d.isAfter(range[1]); d = d.add(1, 'day')) days.push(d)
+  const weeks = []
+  for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7))
+  // 연속일정은 칸마다 이름 대신 주 단위 막대로 (하루짜리만 칸에 이름)
+  const multi = [...new Map(Object.values(byDay).flat().filter(l => l.is_multi_day).map(l => [l.id, l])).values()]
 
   return (
     <div ref={boxRef} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -375,30 +407,55 @@ function MonthView({ month, range, byDay, today, onDayClick, onOpenWeek, onMore,
           <div key={w} className={`py-2 text-center text-xs font-semibold ${i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-slate-500'}`}>{w}</div>
         ))}
       </div>
-      <div
-        ref={gridRef}
-        className="grid grid-cols-7"
-        style={dragStyle(drag)}
-      >
-        {days.map(d => {
-          const key = d.format(DATE_FMT)
-          const dayLogs = byDay[key] || []
-          const inMonth = d.month() === month.month()
-          const dow = d.day()
+      <div ref={gridRef} style={dragStyle(drag)}>
+        {weeks.map(week => {
+          const { bars, lanes } = weekBars(multi, week)
           return (
-            <div
-              key={key}
-              onClick={() => onDayClick(key)}
-              className={`min-h-[80px] sm:min-h-[110px] border-b border-r border-slate-100 p-1.5 cursor-pointer hover:bg-blue-50/40 transition-colors ${inMonth ? '' : 'bg-slate-50/70'}`}
-            >
-              <div className={`text-xs font-medium mb-1 ${inMonth ? '' : 'opacity-40'}`}>
-                <span className={key === today
-                  ? 'inline-flex w-6 h-6 items-center justify-center rounded-full bg-blue-600 text-white'
-                  : `inline-block px-1 ${dow === 0 ? 'text-red-500' : dow === 6 ? 'text-blue-500' : 'text-slate-600'}`}>
-                  {d.date()}
-                </span>
-              </div>
-              <AuthorList logs={dayLogs} onPick={userId => onOpenWeek(key, userId)} onMore={onMore && (() => onMore(key))} />
+            <div key={week[0].format(DATE_FMT)} className="relative grid grid-cols-7">
+              {week.map(d => {
+                const key = d.format(DATE_FMT)
+                const dayLogs = (byDay[key] || []).filter(l => !l.is_multi_day)
+                const inMonth = d.month() === month.month()
+                const dow = d.day()
+                return (
+                  <div
+                    key={key}
+                    onClick={() => onDayClick(key)}
+                    className={`min-h-[80px] sm:min-h-[110px] border-b border-r border-slate-100 p-1.5 cursor-pointer hover:bg-blue-50/40 transition-colors ${inMonth ? '' : 'bg-slate-50/70'}`}
+                  >
+                    <div className={`h-6 mb-1 text-xs font-medium ${inMonth ? '' : 'opacity-40'}`}>
+                      <span className={key === today
+                        ? 'inline-flex w-6 h-6 items-center justify-center rounded-full bg-blue-600 text-white'
+                        : `inline-block px-1 ${dow === 0 ? 'text-red-500' : dow === 6 ? 'text-blue-500' : 'text-slate-600'}`}>
+                        {d.date()}
+                      </span>
+                    </div>
+                    {/* 위에 깔린 연속일정 막대 줄 수만큼 비움 */}
+                    <div style={{ marginTop: lanes * BAR_H }}>
+                      <AuthorList logs={dayLogs} onPick={userId => onOpenWeek(key, userId)} onMore={onMore && (() => onMore(key))} />
+                    </div>
+                  </div>
+                )
+              })}
+              {bars.map(({ log, col, span, lane, isStart, isEnd }) => {
+                const c = userColor(log.user_id, log.user_color)
+                return (
+                  <button
+                    key={log.id}
+                    onClick={e => { e.stopPropagation(); onOpenWeek(log.start_date, log.user_id) }}
+                    title={`${userLabel(log)} · ${dayjs(log.start_date).format('M/D')} ~ ${dayjs(log.end_date).format('M/D')}`}
+                    className={`absolute truncate text-left text-[11px] px-1.5 hover:brightness-95 ${isStart ? 'rounded-l' : ''} ${isEnd ? 'rounded-r' : ''}`}
+                    style={{
+                      top: BAR_TOP + lane * BAR_H, height: BAR_H - 2, lineHeight: `${BAR_H - 2}px`,
+                      left: `calc(${(col / 7) * 100}% + ${isStart ? 4 : 0}px)`,
+                      width: `calc(${(span / 7) * 100}% - ${(isStart ? 4 : 0) + (isEnd ? 4 : 0)}px)`,
+                      backgroundColor: c, color: textOn(c),
+                    }}
+                  >
+                    {isStart ? userLabel(log) : `← ${userLabel(log)}`}
+                  </button>
+                )
+              })}
             </div>
           )
         })}
