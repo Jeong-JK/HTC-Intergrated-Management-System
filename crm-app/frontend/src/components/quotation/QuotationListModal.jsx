@@ -119,7 +119,7 @@ export default function QuotationListModal({
       </div>
 
       {/* 목록 */}
-      <div className="border border-slate-200 rounded-lg overflow-hidden">
+      <div className="border border-slate-200 rounded-lg overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200">

@@ -124,7 +124,7 @@ export default function CategoryManagementModal({ onClose, onSuccess }) {
   }))
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="text-white border-b px-6 py-4 flex items-center justify-between rounded-t-lg" style={{backgroundColor: '#eab308', borderColor: '#ca8a04'}}>
           <h2 className="text-xl font-bold flex items-center gap-2">
@@ -138,7 +138,7 @@ export default function CategoryManagementModal({ onClose, onSuccess }) {
 
         <div className="p-6 flex-1 overflow-hidden flex flex-col">
           {/* 카테고리 통계 */}
-          <div className="mb-4 grid grid-cols-7 gap-2">
+          <div className="mb-4 grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2">
             <button
               onClick={() => setSelectedCategory('ALL')}
               className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${

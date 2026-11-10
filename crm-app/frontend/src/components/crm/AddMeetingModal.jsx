@@ -208,7 +208,7 @@ export default function AddMeetingModal({ onClose, companies, preselectContactId
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between rounded-t-lg">
           <h2 className="text-xl font-bold text-slate-900">미팅 내용 추가</h2>

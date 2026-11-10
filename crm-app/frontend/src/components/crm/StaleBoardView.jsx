@@ -27,7 +27,7 @@ export default function StaleBoardView({ staleBoard, navigateToContact, onOpenPo
           <p className="text-slate-600">모든 담당자가 관리되고 있습니다!</p>
         </div>
       ) : (
-        <div className="bg-white rounded-lg border border-slate-300 overflow-hidden shadow-sm">
+        <div className="bg-white rounded-lg border border-slate-300 overflow-x-auto shadow-sm">
           <table className="w-full">
             <thead className="bg-slate-100 border-b border-slate-300">
               <tr>

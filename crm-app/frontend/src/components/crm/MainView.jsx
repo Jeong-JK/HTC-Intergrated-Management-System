@@ -380,8 +380,8 @@ export default function MainView({ navigate }) {
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
       <div className="bg-white border-b border-slate-200 shadow-sm">
-        <div className="px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="px-3 sm:px-6 py-3 sm:py-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4">
             <button
               onClick={goToMainHub}
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-800 hover:bg-slate-50 transition-colors">
@@ -401,13 +401,13 @@ export default function MainView({ navigate }) {
                 <Users size={24} className="text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-slate-800">HTC Partner CRM</h1>
-                <p className="text-sm text-slate-500">업체, 팀, 담당자 관리</p>
+                <h1 className="text-xl sm:text-2xl font-bold text-slate-800">HTC Partner CRM</h1>
+                <p className="hidden sm:block text-sm text-slate-500">업체, 팀, 담당자 관리</p>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {driveInitializing ? (
               <button
                 disabled
@@ -517,9 +517,9 @@ export default function MainView({ navigate }) {
       </div>
 
       {/* Main Content - 3 Column Layout */}
-      <div className="flex h-[calc(100vh-73px)]">
+      <div className="flex h-[calc(100vh-73px)] overflow-x-auto lg:overflow-x-visible">
         {/* Left Panel - Companies */}
-        <div className="w-64 bg-white border-r border-slate-200 flex flex-col shadow-sm">
+        <div className="w-64 flex-shrink-0 lg:flex-shrink bg-white border-r border-slate-200 flex flex-col shadow-sm">
           <div className="p-4 border-b border-slate-200">
             <h2 className="text-sm font-bold text-slate-900 mb-2">업체 ({companies.filter(c => c.name.toLowerCase().includes(companySearch.toLowerCase())).length})</h2>
             <div className="relative">
@@ -559,7 +559,7 @@ export default function MainView({ navigate }) {
         </div>
 
         {/* Middle Left Panel - Teams */}
-        <div className="w-64 bg-white border-r border-slate-200 flex flex-col">
+        <div className="w-64 flex-shrink-0 lg:flex-shrink bg-white border-r border-slate-200 flex flex-col">
           <div className="p-4 border-b border-slate-200">
             <h2 className="text-sm font-bold text-slate-900">팀 ({teams.length})</h2>
           </div>
@@ -587,7 +587,7 @@ export default function MainView({ navigate }) {
         </div>
 
         {/* Middle Right Panel - Contacts */}
-        <div className="w-64 bg-white border-r border-slate-200 flex flex-col">
+        <div className="w-64 flex-shrink-0 lg:flex-shrink bg-white border-r border-slate-200 flex flex-col">
           <div className="p-4 border-b border-slate-200">
             <h2 className="text-sm font-bold text-slate-900">담당자 ({contacts.length})</h2>
           </div>
@@ -620,7 +620,7 @@ export default function MainView({ navigate }) {
         </div>
 
         {/* Right Panel - Contact Detail or Stale Board */}
-        <div className="flex-1 bg-slate-50 flex flex-col">
+        <div className="flex-1 min-w-[320px] lg:min-w-0 bg-slate-50 flex flex-col">
           <div className="p-4 border-b border-slate-200 bg-white">
             <h2 className="text-sm font-bold text-slate-900">
               {selectedContact ? '담당자 정보' : '대시보드'}
@@ -848,8 +848,8 @@ export default function MainView({ navigate }) {
 
       {/* Upload Progress Modal */}
       {uploadProgress && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl p-6 w-96">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm">
             <h3 className="text-lg font-bold text-slate-900 mb-4">파일 업로드 중...</h3>
             <div className="space-y-3">
               <div className="text-sm text-slate-600 truncate">

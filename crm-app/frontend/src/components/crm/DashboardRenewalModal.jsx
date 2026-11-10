@@ -110,7 +110,7 @@ export default function DashboardRenewalModal({ onClose, onSuccess, navigateToCo
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4">
@@ -198,7 +198,7 @@ export default function DashboardRenewalModal({ onClose, onSuccess, navigateToCo
                       <span className="text-slate-500 text-sm">({statusContacts.length}명)</span>
                     </h3>
 
-                    <div className="bg-white rounded-lg border border-slate-300 overflow-hidden">
+                    <div className="bg-white rounded-lg border border-slate-300 overflow-x-auto">
                       <table className="w-full">
                         <thead className="bg-slate-100 border-b border-slate-300">
                           <tr>
@@ -329,7 +329,7 @@ export default function DashboardRenewalModal({ onClose, onSuccess, navigateToCo
       {/* Contact Action Selection Modal */}
       {showContactActionModal && clickedContact && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[110]"
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[110] p-4"
           onClick={() => setShowContactActionModal(false)}
         >
           <div
