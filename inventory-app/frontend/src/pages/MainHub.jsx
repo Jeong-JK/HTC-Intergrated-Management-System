@@ -2,7 +2,8 @@ import { useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { Package, TrendingUp, Users, LogOut, Settings, Shield, UserCog, X, Check, Mail, Phone, Lock, MessageSquare, Clock, Banknote, HardDrive, CalendarDays } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
-import { updateProfile, getUnreadPostCount, getUnreadCommentNotificationCount } from '../api.js'
+import { updateProfile, getUnreadPostCount, getUnreadCommentNotificationCount, getUsers, getMaintenance, saveMaintenance } from '../api.js'
+import { Modal, Btn } from '../components/Common.jsx'
 import logoImg from '../assets/HTC_logo.png'
 
 const SYSTEMS = [
@@ -75,6 +76,12 @@ export default function MainHub() {
 
   useEffect(() => {
     document.title = 'HTC 통합관리시스템'
+    loadMaintenance()
+    // sales/crm 점검 중 접속 → 서버가 ?locked=앱 으로 돌려보냄
+    if (new URLSearchParams(window.location.search).get('locked')) {
+      window.history.replaceState(null, '', window.location.pathname)
+      alert('현재 수정중입니다. 관리자에게 문의하세요.')
+    }
     loadUnreadCount()
     loadUnreadCommentCount()
     loadSalesStats()
@@ -153,9 +160,18 @@ export default function MainHub() {
     return () => clearInterval(interval)
   }, [])
 
+  // 점검 모드: { inventory: { locked, can_enter, allowed_user_ids(관리자만) }, ... }
+  const [maint, setMaint] = useState({})
+  const [maintTarget, setMaintTarget] = useState(null) // 설정 창을 연 시스템
+  const loadMaintenance = () => getMaintenance().then(r => setMaint(r.data)).catch(() => {})
+
   const handleSystemClick = (system) => {
     if (system.permission && !user?.is_admin && !user?.[system.permission]) {
       alert('권한이 없습니다. 관리자에게 문의하세요.')
+      return
+    }
+    if (maint[system.id] && !maint[system.id].can_enter) {
+      alert('현재 수정중입니다. 관리자에게 문의하세요.')
       return
     }
     const { protocol, hostname } = window.location
@@ -379,10 +395,10 @@ export default function MainHub() {
 
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
           {SYSTEMS.map((system) => (
+            <div key={system.id} className="relative">
             <button
-              key={system.id}
               onClick={() => handleSystemClick(system)}
-              className={`bg-white rounded-2xl border-2 ${system.borderColor} p-8 cursor-pointer transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 group text-left`}
+              className={`w-full h-full bg-white rounded-2xl border-2 ${system.borderColor} p-8 cursor-pointer transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 group text-left`}
             >
               {/* 아이콘 */}
               <div className={`w-16 h-16 bg-gradient-to-br ${system.color} rounded-xl flex items-center justify-center mb-6 shadow-lg group-hover:scale-110 transition-transform`}>
@@ -391,6 +407,9 @@ export default function MainHub() {
 
               {/* 타이틀 */}
               <h3 className="text-2xl font-bold text-slate-800 mb-3">{system.title}</h3>
+              {maint[system.id]?.locked && (
+                <div className="inline-block mb-3 text-xs font-semibold px-2 py-1 rounded bg-red-50 text-red-600 border border-red-200">🔧 점검중</div>
+              )}
               <p className="text-slate-500 text-sm mb-6 leading-relaxed">{system.description}</p>
 
               {/* 진입 버튼 */}
@@ -398,6 +417,14 @@ export default function MainHub() {
                 시스템 열기 →
               </div>
             </button>
+            {user?.is_admin && (
+              <button onClick={() => setMaintTarget(system)} title="점검 모드 설정"
+                className={`absolute top-3 right-3 text-xs font-medium px-2.5 py-1 rounded-lg border transition-colors ${
+                  maint[system.id]?.locked ? 'bg-red-500 border-red-500 text-white hover:bg-red-600' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+                {maint[system.id]?.locked ? '🔒 점검중' : '🔧 점검'}
+              </button>
+            )}
+            </div>
           ))}
         </div>
 
@@ -406,6 +433,11 @@ export default function MainHub() {
           <p>© HTC 통합 관리 시스템 by. jkjeong</p>
         </div>
       </main>
+
+      {maintTarget && (
+        <MaintenanceModal system={maintTarget} state={maint[maintTarget.id]} onClose={() => setMaintTarget(null)}
+          onSaved={() => { setMaintTarget(null); loadMaintenance() }} />
+      )}
 
       {/* 내 정보 수정 모달 */}
       {showProfile && (
@@ -560,5 +592,66 @@ export default function MainHub() {
         </div>
       )}
     </div>
+  )
+}
+
+// 점검 모드 설정 (관리자): 켜면 관리자 + 체크한 사용자만 접근
+function MaintenanceModal({ system, state, onClose, onSaved }) {
+  const [locked, setLocked] = useState(!!state?.locked)
+  const [allowed, setAllowed] = useState(() => new Set(state?.allowed_user_ids || []))
+  const [users, setUsers] = useState([])
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    getUsers()
+      .then(r => setUsers(r.data.users.filter(u => !u.is_admin))) // 관리자는 항상 접근 가능
+      .catch(() => alert('사용자 목록을 불러오지 못했습니다'))
+  }, [])
+
+  const toggle = (id) => setAllowed(prev => {
+    const next = new Set(prev)
+    next.has(id) ? next.delete(id) : next.add(id)
+    return next
+  })
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      await saveMaintenance(system.id, { locked, allowed_user_ids: [...allowed] })
+      onSaved()
+    } catch (e) {
+      alert(e.response?.data?.detail || '저장하지 못했습니다')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal title={`${system.title} 점검 모드`} sub="켜면 관리자와 아래에서 체크한 사용자만 들어갈 수 있습니다" onClose={onClose}
+      footer={<>
+        <Btn onClick={onClose}>취소</Btn>
+        <Btn variant={locked ? 'red' : 'primary'} onClick={save} disabled={saving}>{saving ? '저장 중...' : '저장'}</Btn>
+      </>}>
+      <label className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer ${locked ? 'border-red-300 bg-red-50' : 'border-slate-200'}`}>
+        <input type="checkbox" checked={locked} onChange={e => setLocked(e.target.checked)} className="w-5 h-5 accent-red-500" />
+        <div>
+          <div className="font-semibold text-slate-800">점검 모드 켜기</div>
+          <div className="text-xs text-slate-500">다른 사용자에게 "현재 수정중입니다. 관리자에게 문의하세요."가 표시됩니다</div>
+        </div>
+      </label>
+      <div className="mt-4 text-sm font-semibold text-slate-700">
+        점검 중에도 들어올 수 있는 사용자 <span className="font-normal text-slate-400">(테스트용, {allowed.size}명)</span>
+      </div>
+      <div className="mt-2 max-h-64 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
+        {users.map(u => (
+          <label key={u.id} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50">
+            <input type="checkbox" checked={allowed.has(u.id)} onChange={() => toggle(u.id)} className="w-4 h-4 accent-blue-600" />
+            <span className="text-sm font-medium text-slate-800">{u.name}</span>
+            <span className="text-xs text-slate-400">{[u.position, u.user_id].filter(Boolean).join(' · ')}</span>
+          </label>
+        ))}
+        {!users.length && <div className="px-3 py-4 text-sm text-slate-400 text-center">관리자 외 사용자가 없습니다</div>}
+      </div>
+    </Modal>
   )
 }

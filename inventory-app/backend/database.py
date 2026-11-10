@@ -228,6 +228,13 @@ CREATE TABLE IF NOT EXISTS work_log_items (
     FOREIGN KEY (master_id) REFERENCES work_log_masters(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS maintenance (
+    sys_key          VARCHAR(20) PRIMARY KEY,   -- inventory / sales / crm / worklog
+    locked           BOOLEAN     NOT NULL DEFAULT FALSE,
+    allowed_user_ids TEXT,                      -- JSON 배열: 잠금 중에도 들어올 수 있는 사용자 id
+    updated_at       DATETIME    DEFAULT NOW() ON UPDATE NOW()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- 업무일지 권한 (기존 users 테이블에 컬럼 추가, 이미 있으면 무시)
 ALTER TABLE users
     ADD COLUMN IF NOT EXISTS can_access_worklog BOOLEAN DEFAULT FALSE,

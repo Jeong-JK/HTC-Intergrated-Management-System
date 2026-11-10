@@ -1,5 +1,7 @@
 """HTC Inventory — FastAPI Main v2"""
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -11,7 +13,7 @@ from datetime import datetime, timedelta
 
 from config import APP_TITLE, APP_VERSION, CORS_ORIGINS, PIPELINE_DB_HOST, PIPELINE_DB_USER, PIPELINE_DB_PASSWORD, PIPELINE_DB_NAME
 from database import init_db
-from routers import items, rental, delivery, stats, inbound, rack, settings, companies, alerts, auth, posts, drive, work_logs
+from routers import items, rental, delivery, stats, inbound, rack, settings, companies, alerts, auth, posts, drive, work_logs, maintenance
 
 # 환율 캐시 (1시간마다 갱신)
 exchange_rate_cache = {"rate": None, "updated": None}
@@ -27,6 +29,24 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 점검 모드: inv/cal 도메인의 API와, sales/crm 미들웨어가 부르는 /api/auth/me?app=xxx 를 막음
+LOCK_HOSTS = {"inv": "inventory", "cal": "worklog"}
+OPEN_PATHS = ("/api/maintenance", "/api/auth/login", "/api/auth/logout")
+
+
+@app.middleware("http")
+async def maintenance_guard(request: Request, call_next):
+    path = request.url.path
+    if path.startswith("/api/") and not path.startswith(OPEN_PATHS):
+        system = request.query_params.get("app") if path == "/api/auth/me" else None
+        system = system or LOCK_HOSTS.get(request.headers.get("host", "").split(".")[0])
+        if system:
+            msg = await run_in_threadpool(maintenance.blocked_message, system, request.cookies.get("session_token"))
+            if msg:
+                return JSONResponse(status_code=423, content={"detail": msg})
+    return await call_next(request)
+
 
 @app.on_event("startup")
 def startup():
@@ -45,6 +65,7 @@ app.include_router(auth.router,      prefix="/api")
 app.include_router(posts.router,     prefix="/api")
 app.include_router(drive.router,     prefix="/api")
 app.include_router(work_logs.router, prefix="/api")
+app.include_router(maintenance.router, prefix="/api")
 
 # 환율 API (exchangerate-api.com 사용)
 @app.get("/api/exchange-rate")

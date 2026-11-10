@@ -18,6 +18,17 @@ app = FastAPI(title=APP_TITLE, version=APP_VERSION)
 # 내부 API 호출용 (localhost), 리디렉션용 (외부 URL)
 AUTH_API_URL = "http://localhost:8000"
 
+
+def locked_response(request: Request, app_name: str, detail: str):
+    """점검 모드: API는 423, 화면 요청은 메인허브로 (허브가 안내 문구 표시)"""
+    from fastapi.responses import JSONResponse
+    if request.url.path.startswith("/api/"):
+        return JSONResponse(status_code=423, content={"detail": detail})
+    host = request.headers.get("host", "").split(":")[0]
+    hub = "https://ims.hltac.com/" if "hltac.com" in host else f"http://{host}:8000/"
+    return RedirectResponse(url=f"{hub}?locked={app_name}", status_code=302)
+
+
 # 인증 체크 미들웨어
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -37,6 +48,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 async with httpx.AsyncClient() as client:
                     response = await client.get(
                         f"{AUTH_API_URL}/api/auth/me",
+                        params={"app": "sales"},  # 점검 모드 확인용
                         cookies={"session_token": session_token},
                         timeout=2.0
                     )
@@ -59,6 +71,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
                             return RedirectResponse(url=AUTH_SERVICE_URL, status_code=302)
 
                         return await call_next(request)
+                    if response.status_code == 423:
+                        return locked_response(request, "sales", response.json().get("detail"))
             except Exception as e:
                 # 인증 서비스 연결 실패 시 로그 출력 (타임아웃, 네트워크 오류 등)
                 logger.warning(f"인증 서비스 연결 실패: {e}")

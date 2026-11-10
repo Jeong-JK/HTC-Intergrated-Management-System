@@ -2,6 +2,20 @@ import axios from 'axios'
 
 const api = axios.create({ baseURL: '/api' })
 
+// 점검 모드(423): 안내 후 메인허브로 — 한 번만
+let lockNotified = false
+const onLocked = (err) => {
+  if (err.response?.status === 423 && !lockNotified) {
+    lockNotified = true
+    alert(err.response.data?.detail || '현재 수정중입니다. 관리자에게 문의하세요.')
+    const { protocol, hostname } = window.location
+    window.location.href = hostname.endsWith('hltac.com') ? `${protocol}//ims.hltac.com/` : `${protocol}//${hostname}:8000/`
+  }
+  return Promise.reject(err)
+}
+api.interceptors.response.use(r => r, onLocked)
+axios.interceptors.response.use(r => r, onLocked) // axios를 직접 쓰는 화면용
+
 // Export axios instance for direct use
 export { api }
 export const get = (...args) => api.get(...args)

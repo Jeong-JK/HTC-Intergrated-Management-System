@@ -1,6 +1,20 @@
 import axios from 'axios'
+import { goHub } from './site.js'
 
 const api = axios.create({ baseURL: '/api' })
+
+// 점검 모드(423): 안내 후 메인허브로 — 한 번만
+let lockNotified = false
+const onLocked = (err) => {
+  if (err.response?.status === 423 && !lockNotified) {
+    lockNotified = true
+    alert(err.response.data?.detail || '현재 수정중입니다. 관리자에게 문의하세요.')
+    goHub()
+  }
+  return Promise.reject(err)
+}
+api.interceptors.response.use(r => r, onLocked)
+axios.interceptors.response.use(r => r, onLocked) // axios를 직접 쓰는 화면용
 
 // Constants
 export const getConstants = () => api.get('/items/constants')
@@ -81,6 +95,8 @@ export const login         = (data)   => api.post('/auth/login', data)
 export const logout        = ()       => api.post('/auth/logout')
 export const getMe         = ()       => api.get('/auth/me')
 export const getUsers      = ()       => api.get('/auth/users')
+export const getMaintenance  = ()       => api.get('/maintenance')
+export const saveMaintenance = (sys, d) => api.put(`/maintenance/${sys}`, d)
 export const createUser    = (data)   => api.post('/auth/users', data)
 export const updateUser    = (id, d)  => api.put(`/auth/users/${id}`, d)
 export const deleteUser    = (id)     => api.delete(`/auth/users/${id}`)
