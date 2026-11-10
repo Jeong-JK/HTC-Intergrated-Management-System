@@ -51,6 +51,8 @@ export default function MainView({ navigate }) {
 
   const [driveAuthorized, setDriveAuthorized] = useState(false)
   const [driveInitializing, setDriveInitializing] = useState(false)
+  const [showBoard, setShowBoard] = useState(false) // 폰: 장기 미활동 대시보드 화면
+  const [showMore, setShowMore] = useState(false)   // 폰: 헤더 나머지 버튼 펼침
   const [uploadProgress, setUploadProgress] = useState(null) // { fileName: string, percent: number }
 
   useEffect(() => {
@@ -159,7 +161,18 @@ export default function MainView({ navigate }) {
     }
   }
 
+  // 폰/세로 태블릿(lg 미만)에선 이 단계의 칸 하나만 보여줌. PC는 4칸 모두
+  const step = selectedContact || showBoard ? 'detail' : selectedTeamId ? 'teamContacts' : selectedCompanyId ? 'teams' : 'companies'
+  const show = (name) => (step === name ? 'flex' : 'hidden')
+  useEffect(() => { if (window.innerWidth < 1024) window.scrollTo(0, 0) }, [step])
+  const moreCls = showMore ? '' : 'max-lg:hidden'
+  const companyName = companies.find(c => c.id === selectedCompanyId)?.name
+  const teamName = teams.find(t => t.id === selectedTeamId)?.name
+  const backFromDetail = () => { setShowBoard(false); setSelectedContact(null); setMeetings([]) }
+  const backFromContacts = () => { setSelectedTeamId(null); setContacts([]) }
+
   const handleHomeClick = () => {
+    setShowBoard(false)
     setSelectedCompanyId(null)
     setSelectedTeamId(null)
     setSelectedContact(null)
@@ -411,19 +424,19 @@ export default function MainView({ navigate }) {
             {driveInitializing ? (
               <button
                 disabled
-                className="px-4 py-2 bg-gray-400 text-white rounded-lg cursor-not-allowed flex items-center gap-2 shadow-sm">
+                className={`${moreCls} px-4 py-2 bg-gray-400 text-white rounded-lg cursor-not-allowed flex items-center gap-2 shadow-sm`}>
                 Drive 초기화중...
               </button>
             ) : driveAuthorized ? (
               <button
                 disabled
-                className="px-4 py-2 bg-green-100 text-green-800 rounded-lg cursor-default flex items-center gap-2 shadow-sm border border-green-300">
+                className={`${moreCls} px-4 py-2 bg-green-100 text-green-800 rounded-lg cursor-default flex items-center gap-2 shadow-sm border border-green-300`}>
                 🟢 Drive 연결됨
               </button>
             ) : (
               <button
                 onClick={handleDriveLogin}
-                className="px-4 py-2 bg-red-100 text-red-800 rounded-lg hover:bg-red-200 transition-colors flex items-center gap-2 shadow-sm border border-red-300">
+                className={`${moreCls} px-4 py-2 bg-red-100 text-red-800 rounded-lg hover:bg-red-200 transition-colors flex items-center gap-2 shadow-sm border border-red-300`}>
                 🔴 Drive 로그인
               </button>
             )}
@@ -436,7 +449,7 @@ export default function MainView({ navigate }) {
             </button>
             <button
               onClick={() => setShowAddCompanyModal(true)}
-              className="px-4 py-2 text-white rounded-lg transition-colors flex items-center gap-2 shadow-sm hover:opacity-90"
+              className={`${moreCls} px-4 py-2 text-white rounded-lg transition-colors flex items-center gap-2 shadow-sm hover:opacity-90`}
               style={{backgroundColor: '#f97316'}}>
               <Plus size={18}/>
               업체 추가
@@ -450,21 +463,21 @@ export default function MainView({ navigate }) {
             </button>
             <button
               onClick={() => setShowEditCompanyModal(true)}
-              className="px-4 py-2 text-white rounded-lg transition-colors flex items-center gap-2 shadow-sm hover:opacity-90"
+              className={`${moreCls} px-4 py-2 text-white rounded-lg transition-colors flex items-center gap-2 shadow-sm hover:opacity-90`}
               style={{backgroundColor: '#22c55e'}}>
               <Edit size={18}/>
               업체 수정
             </button>
             <button
               onClick={() => setShowCategoryModal(true)}
-              className="px-4 py-2 text-white rounded-lg transition-colors flex items-center gap-2 shadow-sm hover:opacity-90"
+              className={`${moreCls} px-4 py-2 text-white rounded-lg transition-colors flex items-center gap-2 shadow-sm hover:opacity-90`}
               style={{backgroundColor: '#3b82f6'}}>
               <Users size={18}/>
               카테고리
             </button>
             <button
               onClick={() => setShowRecentMeetingsModal(true)}
-              className="px-4 py-2 text-white rounded-lg transition-colors flex items-center gap-2 shadow-sm hover:opacity-90"
+              className={`${moreCls} px-4 py-2 text-white rounded-lg transition-colors flex items-center gap-2 shadow-sm hover:opacity-90`}
               style={{backgroundColor: '#6366f1'}}>
               <Calendar size={18}/>
               최근 미팅
@@ -472,14 +485,14 @@ export default function MainView({ navigate }) {
             <button
               onClick={() => setShowCompanyTimelineModal(true)}
               disabled={!selectedCompanyId}
-              className="px-4 py-2 text-white rounded-lg transition-colors flex items-center gap-2 shadow-sm hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`${moreCls} px-4 py-2 text-white rounded-lg transition-colors flex items-center gap-2 shadow-sm hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed`}
               style={{backgroundColor: '#a855f7'}}>
               <TrendingUp size={18}/>
               업체 타임라인
             </button>
             <button
               onClick={() => setShowDeleteCompanyModal(true)}
-              className="px-4 py-2 text-white rounded-lg transition-colors flex items-center gap-2 shadow-sm hover:opacity-90"
+              className={`${moreCls} px-4 py-2 text-white rounded-lg transition-colors flex items-center gap-2 shadow-sm hover:opacity-90`}
               style={{backgroundColor: '#ef4444'}}>
               <Trash2 size={18}/>
               업체 삭제
@@ -498,10 +511,14 @@ export default function MainView({ navigate }) {
                   alert('엑셀 다운로드에 실패했습니다')
                 }
               }}
-              className="px-4 py-2 text-white rounded-lg transition-colors flex items-center gap-2 shadow-sm hover:opacity-90"
+              className={`${moreCls} px-4 py-2 text-white rounded-lg transition-colors flex items-center gap-2 shadow-sm hover:opacity-90`}
               style={{backgroundColor: '#10b981'}}>
               <Download size={18}/>
               엑셀
+            </button>
+            <button onClick={() => setShowMore(!showMore)}
+              className="lg:hidden px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-600 text-sm">
+              {showMore ? '접기' : '더보기'}
             </button>
             {/* 견적서 버튼 - 개발 중 (숨김)
             <button
@@ -517,9 +534,13 @@ export default function MainView({ navigate }) {
       </div>
 
       {/* Main Content - 3 Column Layout */}
-      <div className="flex h-[calc(100vh-73px)] overflow-x-auto lg:overflow-x-visible">
+      <div className="flex h-[calc(100vh-73px)] max-lg:h-auto">
         {/* Left Panel - Companies */}
-        <div className="w-64 flex-shrink-0 lg:flex-shrink bg-white border-r border-slate-200 flex flex-col shadow-sm">
+        <div className={`${show('companies')} lg:flex w-full lg:w-64 bg-white border-r border-slate-200 flex-col shadow-sm`}>
+          <button onClick={() => setShowBoard(true)}
+            className="lg:hidden m-3 mb-0 px-4 py-2.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 text-sm font-medium text-left">
+            📊 장기 미활동 대시보드 보기
+          </button>
           <div className="p-4 border-b border-slate-200">
             <h2 className="text-sm font-bold text-slate-900 mb-2">업체 ({companies.filter(c => c.name.toLowerCase().includes(companySearch.toLowerCase())).length})</h2>
             <div className="relative">
@@ -559,7 +580,11 @@ export default function MainView({ navigate }) {
         </div>
 
         {/* Middle Left Panel - Teams */}
-        <div className="w-64 flex-shrink-0 lg:flex-shrink bg-white border-r border-slate-200 flex flex-col">
+        <div className={`${show('teams')} lg:flex w-full lg:w-64 bg-white border-r border-slate-200 flex-col`}>
+          <button onClick={handleHomeClick} className="lg:hidden flex items-center gap-2 px-4 py-3 border-b border-slate-200 bg-white text-left">
+            <span className="text-blue-600 text-lg leading-none">←</span>
+            <span className="font-semibold text-slate-800 truncate">{companyName}</span>
+          </button>
           <div className="p-4 border-b border-slate-200">
             <h2 className="text-sm font-bold text-slate-900">팀 ({teams.length})</h2>
           </div>
@@ -587,7 +612,11 @@ export default function MainView({ navigate }) {
         </div>
 
         {/* Middle Right Panel - Contacts */}
-        <div className="w-64 flex-shrink-0 lg:flex-shrink bg-white border-r border-slate-200 flex flex-col">
+        <div className={`${show('teamContacts')} lg:flex w-full lg:w-64 bg-white border-r border-slate-200 flex-col`}>
+          <button onClick={backFromContacts} className="lg:hidden flex items-center gap-2 px-4 py-3 border-b border-slate-200 bg-white text-left">
+            <span className="text-blue-600 text-lg leading-none">←</span>
+            <span className="font-semibold text-slate-800 truncate">{`${companyName || ''} · ${teamName || ''}`}</span>
+          </button>
           <div className="p-4 border-b border-slate-200">
             <h2 className="text-sm font-bold text-slate-900">담당자 ({contacts.length})</h2>
           </div>
@@ -620,13 +649,17 @@ export default function MainView({ navigate }) {
         </div>
 
         {/* Right Panel - Contact Detail or Stale Board */}
-        <div className="flex-1 min-w-[320px] lg:min-w-0 bg-slate-50 flex flex-col">
+        <div className={`${show('detail')} lg:flex flex-1 min-w-0 bg-slate-50 flex-col`}>
+          <button onClick={backFromDetail} className="lg:hidden flex items-center gap-2 px-4 py-3 border-b border-slate-200 bg-white text-left">
+            <span className="text-blue-600 text-lg leading-none">←</span>
+            <span className="font-semibold text-slate-800 truncate">{selectedContact ? (teamName || '담당자 목록') : '업체 목록'}</span>
+          </button>
           <div className="p-4 border-b border-slate-200 bg-white">
             <h2 className="text-sm font-bold text-slate-900">
               {selectedContact ? '담당자 정보' : '대시보드'}
             </h2>
           </div>
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className="flex-1 overflow-y-auto p-3 lg:p-6">
             {selectedContact ? (
               <ContactDetailView
                 contact={selectedContact}

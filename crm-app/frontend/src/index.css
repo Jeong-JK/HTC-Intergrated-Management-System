@@ -39,3 +39,8 @@ body {
 .react-datepicker__current-month { color: #1e293b !important; font-weight: 600 !important; }
 .react-datepicker__day--selected { background: #3b82f6 !important; border-radius: 6px !important; }
 .react-datepicker__day:hover { background: #eff6ff !important; border-radius: 6px !important; }
+
+/* 아이폰은 16px 미만 입력칸을 누르면 화면을 확대함 → 폰 폭에서만 16px */
+@media (max-width: 767px) {
+  input, select, textarea { font-size: 16px !important; }
+}
