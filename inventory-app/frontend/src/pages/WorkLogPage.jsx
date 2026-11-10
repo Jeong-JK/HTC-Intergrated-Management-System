@@ -52,7 +52,7 @@ export default function WorkLogPage() {
   const blocked = !can('can_access_worklog') // 접근 권한 없으면 차단
 
   // 'month' | 'week' | 'day'(일간, 관리자) | 'list'(직원별 상세, 관리자)
-  const [view, setView] = useState('month')
+  const [view, setView] = useState(() => window.innerWidth < 640 ? 'week' : 'month') // 폰은 주간(내 일지 목록)으로 시작
   const [month, setMonth] = useState(dayjs().startOf('month')) // 월간/상세 기준 달
   const [weekStart, setWeekStart] = useState(mondayOf(dayjs()))
   const [day, setDay] = useState(dayjs().startOf('day'))
@@ -203,14 +203,14 @@ export default function WorkLogPage() {
             </div>
           </div>
           {canWrite && (
-            <Btn variant="primary" onClick={() => setEditing({ date: today })}>
+            <Btn variant="primary" className="max-sm:hidden" onClick={() => setEditing({ date: today })}>
               <Plus size={16} /> 업무일지 작성
             </Btn>
           )}
         </div>
       </div>
 
-      <div className="max-w-screen-2xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
+      <div className="max-w-screen-2xl mx-auto px-3 sm:px-6 pt-4 pb-24 sm:py-6">
         {/* 툴바 */}
         <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
           <div className="flex items-center gap-2">
@@ -306,6 +306,13 @@ export default function WorkLogPage() {
         </>)}
       </div>
 
+      {canWrite && !editing && (
+        <button onClick={() => setEditing({ date: today })} title="업무일지 작성"
+          className="sm:hidden fixed bottom-5 right-5 z-40 w-14 h-14 rounded-full bg-blue-600 text-white shadow-lg flex items-center justify-center active:bg-blue-700">
+          <Plus size={26} />
+        </button>
+      )}
+
       {editing && (
         <WorkLogModal
           log={editing.log}
@@ -390,8 +397,14 @@ function AuthorList({ logs, onPick, onMore }) {
   const authors = [...new Map(logs.map(l => [l.user_id, l])).values()]
   const shown = authors.length > MAX_NAMES ? authors.slice(0, MAX_NAMES - 1) : authors
   const rest = authors.length - shown.length
+  if (!authors.length) return null
   return (
-    <div className="space-y-0.5">
+    <>
+    <button onClick={e => { if (onMore) { e.stopPropagation(); onMore() } }}
+      className="sm:hidden block w-full text-center text-[11px] font-semibold px-1 py-0.5 rounded bg-orange-50 text-orange-700">
+      {authors.length}명
+    </button>
+    <div className="max-sm:hidden space-y-0.5">
       {shown.map(a => (
         <button
           key={a.user_id}
@@ -405,6 +418,7 @@ function AuthorList({ logs, onPick, onMore }) {
         ? <button onClick={e => { e.stopPropagation(); onMore() }} className="text-[11px] text-orange-600 hover:underline px-1.5">외 {rest}명 · 일간 보기</button>
         : <div className="text-[11px] text-slate-400 px-1.5">외 {rest}명</div>)}
     </div>
+    </>
   )
 }
 
@@ -416,7 +430,7 @@ function WeekView({ weekStart, byDay, today, onDayClick, onLogClick }) {
         const key = d.format(DATE_FMT)
         const dayLogs = byDay[key] || []
         return (
-          <div key={key} className={`bg-white rounded-xl border shadow-sm flex flex-col min-h-[160px] lg:min-h-[420px] ${key === today ? 'border-blue-400' : 'border-slate-200'}`}>
+          <div key={key} className={`bg-white rounded-xl border shadow-sm flex flex-col min-h-[100px] sm:min-h-[160px] lg:min-h-[420px] ${key === today ? 'border-blue-400' : 'border-slate-200'}`}>
             <div className="px-3 py-2 border-b border-slate-100 text-sm font-semibold text-slate-700">
               {MONTH_WEEKDAYS[d.day()]} <span className="font-normal text-slate-500">{d.format('M/D')}</span>
               {key === today && <span className="ml-1.5 text-[10px] bg-blue-500 text-white px-1.5 py-0.5 rounded-full">오늘</span>}
