@@ -8,7 +8,7 @@ let lockNotified = false
 const onLocked = (err) => {
   if (err.response?.status === 423 && !lockNotified) {
     lockNotified = true
-    alert(err.response.data?.detail || '현재 수정중입니다. 관리자에게 문의하세요.')
+    alert(err.response.data?.detail || '현재 점검중입니다. 관리자에게 문의하세요.')
     goHub()
   }
   return Promise.reject(err)

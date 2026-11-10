@@ -78,11 +78,11 @@ def test_maintenance_lock():
             return "DB", None  # 점검 검사 통과 후 실제 API(DB)까지 감
         return r.status_code, r.json().get("detail") if r.status_code == 423 else None
     cases = [
-        (("/api/items/constants", "staff"), (423, maintenance.LOCK_MESSAGE)),
+        (("/api/items/constants", "staff"), (423, "현재 재고관리는 점검중입니다. 관리자에게 문의하세요.")),
         (("/api/items/constants", "admin"), (200, None)),
         (("/api/items/constants", "writer"), (200, None)),            # 허용 사용자
         (("/api/items/constants", "staff", "ims.hltac.com"), (200, None)),  # 허브 도메인은 안 막음
-        (("/api/auth/me?app=sales", "staff", "localhost:8000"), (423, maintenance.LOCK_MESSAGE)),  # sales 미들웨어 경로
+        (("/api/auth/me?app=sales", "staff", "localhost:8000"), (423, "현재 Sales Pipeline은 점검중입니다. 관리자에게 문의하세요.")),  # sales 미들웨어 경로
         (("/api/auth/me?app=crm", "staff", "localhost:8000"), ("DB", None)),  # crm은 안 잠김 → 통과
     ]
     fails = []

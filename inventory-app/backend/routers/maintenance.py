@@ -1,5 +1,5 @@
 """HTC Inventory — 점검 모드 Router
-관리자가 시스템별로 잠그면 관리자 + 허용한 사용자만 접근 가능. 그 외에는 LOCK_MESSAGE (HTTP 423)
+관리자가 시스템별로 잠그면 관리자 + 허용한 사용자만 접근 가능. 그 외에는 LOCK_MESSAGE (lock_message, HTTP 423)
 막는 곳: main.py maintenance_guard (inv/cal 도메인 API, sales/crm이 부르는 /api/auth/me?app=)"""
 import json
 from typing import List
@@ -12,7 +12,12 @@ from routers.auth import require_perm
 router = APIRouter(tags=["maintenance"])
 
 SYSTEMS = ("inventory", "sales", "crm", "worklog")  # 메인허브 카드 id와 같음
-LOCK_MESSAGE = "현재 수정중입니다. 관리자에게 문의하세요."
+# 안내 문구용 이름 + 조사 (메인허브 카드 제목과 같게)
+NAMES = {"inventory": "재고관리는", "sales": "Sales Pipeline은", "crm": "CRM은", "worklog": "업무일지 캘린더는"}
+
+
+def lock_message(system):
+    return f"현재 {NAMES[system]} 점검중입니다. 관리자에게 문의하세요."
 
 
 class MaintenanceSave(BaseModel):
@@ -39,7 +44,7 @@ def blocked_message(system, session_token):
     user = auth.get_session(session_token)
     if not user or can_enter(row, user):
         return None
-    return LOCK_MESSAGE
+    return lock_message(system)
 
 
 @router.get("/maintenance")
@@ -50,7 +55,7 @@ def get_status(request: Request):
     out = {}
     for s in SYSTEMS:
         row = rows.get(s, {"locked": False, "allowed_user_ids": []})
-        out[s] = {"locked": row["locked"], "can_enter": can_enter(row, user)}
+        out[s] = {"locked": row["locked"], "can_enter": can_enter(row, user), "message": lock_message(s)}
         if user.get("is_admin"):
             out[s]["allowed_user_ids"] = row["allowed_user_ids"]
     return out

@@ -76,12 +76,10 @@ export default function MainHub() {
 
   useEffect(() => {
     document.title = 'HTC 통합관리시스템'
-    loadMaintenance()
     // sales/crm 점검 중 접속 → 서버가 ?locked=앱 으로 돌려보냄
-    if (new URLSearchParams(window.location.search).get('locked')) {
-      window.history.replaceState(null, '', window.location.pathname)
-      alert('현재 수정중입니다. 관리자에게 문의하세요.')
-    }
+    const lockedApp = new URLSearchParams(window.location.search).get('locked')
+    if (lockedApp) window.history.replaceState(null, '', window.location.pathname)
+    loadMaintenance(lockedApp)
     loadUnreadCount()
     loadUnreadCommentCount()
     loadSalesStats()
@@ -163,7 +161,12 @@ export default function MainHub() {
   // 점검 모드: { inventory: { locked, can_enter, allowed_user_ids(관리자만) }, ... }
   const [maint, setMaint] = useState({})
   const [maintTarget, setMaintTarget] = useState(null) // 설정 창을 연 시스템
-  const loadMaintenance = () => getMaintenance().then(r => setMaint(r.data)).catch(() => {})
+  const loadMaintenance = (lockedApp) => getMaintenance()
+    .then(r => {
+      setMaint(r.data)
+      if (lockedApp) alert(r.data[lockedApp]?.message || '현재 점검중입니다. 관리자에게 문의하세요.')
+    })
+    .catch(() => {})
 
   const handleSystemClick = (system) => {
     if (system.permission && !user?.is_admin && !user?.[system.permission]) {
@@ -171,7 +174,7 @@ export default function MainHub() {
       return
     }
     if (maint[system.id] && !maint[system.id].can_enter) {
-      alert('현재 수정중입니다. 관리자에게 문의하세요.')
+      alert(maint[system.id].message)
       return
     }
     const { protocol, hostname } = window.location
@@ -636,7 +639,7 @@ function MaintenanceModal({ system, state, onClose, onSaved }) {
         <input type="checkbox" checked={locked} onChange={e => setLocked(e.target.checked)} className="w-5 h-5 accent-red-500" />
         <div>
           <div className="font-semibold text-slate-800">점검 모드 켜기</div>
-          <div className="text-xs text-slate-500">다른 사용자에게 "현재 수정중입니다. 관리자에게 문의하세요."가 표시됩니다</div>
+          <div className="text-xs text-slate-500">다른 사용자에게 "{state?.message}"가 표시됩니다</div>
         </div>
       </label>
       <div className="mt-4 text-sm font-semibold text-slate-700">
