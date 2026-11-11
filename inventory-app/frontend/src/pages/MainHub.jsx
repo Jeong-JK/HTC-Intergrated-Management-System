@@ -403,16 +403,20 @@ export default function MainHub() {
             <p className="text-slate-500 text-sm mt-1">사용할 시스템을 선택하세요</p>
           </div>
           {user?.is_admin && (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-3">
               {OPS_APPS.map(app => (
-                <div key={app.id} className="flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 bg-white border border-slate-200 rounded-lg">
-                  <span className="text-xs font-semibold text-slate-600 mr-1">{app.title}</span>
-                  {Object.entries(OPS_LABEL).map(([action, label]) => (
-                    <button key={action} onClick={() => askOps(app, action)}
-                      className="text-xs font-medium px-2.5 py-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50">
-                      {label}
+                <div key={app.id} className={`rounded-xl border-2 px-3 py-2 ${app.box}`}>
+                  <div className={`text-sm font-bold mb-1.5 ${app.text}`}>{app.title}</div>
+                  <div className="flex gap-1.5">
+                    <button onClick={() => askOps(app, 'build')}
+                      className={`text-xs font-semibold px-3 py-1.5 rounded-md border bg-white ${app.outline}`}>
+                      {OPS_LABEL.build}
                     </button>
-                  ))}
+                    <button onClick={() => askOps(app, 'restart')}
+                      className={`text-xs font-semibold px-3 py-1.5 rounded-md text-white ${app.solid}`}>
+                      {OPS_LABEL.restart}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -659,7 +663,15 @@ function MaintenanceModal({ system, state, onClose, onSaved }) {
 
 const OPS_LABEL = { build: '프론트 빌드', restart: '서버 재시작' }
 // 메인허브·재고·업무일지는 하나의 앱 → 버튼 한 묶음
-const OPS_APPS = [{ id: 'inventory', title: '메인허브·재고·업무일지' }, { id: 'sales', title: 'Sales Pipeline' }, { id: 'crm', title: 'CRM' }]
+// 색은 아래 시스템 카드와 맞춤 (Tailwind가 찾을 수 있게 클래스는 통째로)
+const OPS_APPS = [
+  { id: 'inventory', title: '메인허브·재고·업무일지', box: 'border-blue-200 bg-blue-50', text: 'text-blue-700',
+    outline: 'border-blue-300 text-blue-700 hover:bg-blue-100', solid: 'bg-blue-600 hover:bg-blue-700' },
+  { id: 'sales', title: 'Sales Pipeline', box: 'border-green-200 bg-green-50', text: 'text-green-700',
+    outline: 'border-green-300 text-green-700 hover:bg-green-100', solid: 'bg-green-600 hover:bg-green-700' },
+  { id: 'crm', title: 'CRM', box: 'border-purple-200 bg-purple-50', text: 'text-purple-700',
+    outline: 'border-purple-300 text-purple-700 hover:bg-purple-100', solid: 'bg-purple-600 hover:bg-purple-700' },
+]
 
 // 관리자: 빌드/재시작 실행 후 1초마다 진행률 확인. 창을 닫아도 서버에서는 계속 진행
 function OpsModal({ system, action, onClose }) {
