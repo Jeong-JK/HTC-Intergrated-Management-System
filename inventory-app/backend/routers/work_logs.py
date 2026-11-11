@@ -1,9 +1,8 @@
 """HTC Inventory — 업무일지 캘린더 Router"""
-import re
 from datetime import date
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from database import db_cursor
 from routers.auth import rank_order, require_perm
 
@@ -27,13 +26,56 @@ class WorkLogSave(BaseModel):
     end_date: Optional[date] = None
     items: List[str]
     user_id: Optional[int] = None  # 관리자 대리 작성 시 대상 직원
+    color_shade: Optional[int] = Field(None, ge=0, le=5)  # 작성자 계열 안의 색 단계 (None = 기본)
 
 
-class ColorSave(BaseModel):
-    color: Optional[str] = None  # None이면 기본 팔레트로
+class HueSave(BaseModel):
+    hue: str = ""
 
 
-HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
+# ── 캘린더 색: 사람마다 계열(hue) 하나 고정(서로 겹치지 않게), 일지마다 그 계열 안의 단계(0~5)를 고름
+# 일지엔 단계만 저장하므로 다른 계열 색은 저장될 수 없음. 값은 Tailwind 기본 색상 300~800
+HUES = ('blue', 'red', 'green', 'orange', 'violet', 'teal', 'pink', 'yellow', 'indigo', 'sky', 'lime', 'amber', 'purple', 'cyan', 'slate', 'stone')  # 자동 배정 순서 (서로 잘 구분되는 순)
+HUE_NAMES = {'red': '빨강', 'orange': '주황', 'amber': '호박', 'yellow': '노랑', 'lime': '연두', 'green': '초록', 'teal': '청록', 'cyan': '시안', 'sky': '하늘', 'blue': '파랑', 'indigo': '남색', 'violet': '보라', 'purple': '자주', 'pink': '분홍', 'stone': '갈회색', 'slate': '회색'}
+SHADES = {
+    'blue': ['#93c5fd', '#60a5fa', '#3b82f6', '#2563eb', '#1d4ed8', '#1e40af'],
+    'red': ['#fca5a5', '#f87171', '#ef4444', '#dc2626', '#b91c1c', '#991b1b'],
+    'green': ['#86efac', '#4ade80', '#22c55e', '#16a34a', '#15803d', '#166534'],
+    'orange': ['#fdba74', '#fb923c', '#f97316', '#ea580c', '#c2410c', '#9a3412'],
+    'violet': ['#c4b5fd', '#a78bfa', '#8b5cf6', '#7c3aed', '#6d28d9', '#5b21b6'],
+    'teal': ['#5eead4', '#2dd4bf', '#14b8a6', '#0d9488', '#0f766e', '#115e59'],
+    'pink': ['#f9a8d4', '#f472b6', '#ec4899', '#db2777', '#be185d', '#9d174d'],
+    'yellow': ['#fde047', '#facc15', '#eab308', '#ca8a04', '#a16207', '#854d0e'],
+    'indigo': ['#a5b4fc', '#818cf8', '#6366f1', '#4f46e5', '#4338ca', '#3730a3'],
+    'sky': ['#7dd3fc', '#38bdf8', '#0ea5e9', '#0284c7', '#0369a1', '#075985'],
+    'lime': ['#bef264', '#a3e635', '#84cc16', '#65a30d', '#4d7c0f', '#3f6212'],
+    'amber': ['#fcd34d', '#fbbf24', '#f59e0b', '#d97706', '#b45309', '#92400e'],
+    'purple': ['#d8b4fe', '#c084fc', '#a855f7', '#9333ea', '#7e22ce', '#6b21a8'],
+    'cyan': ['#67e8f9', '#22d3ee', '#06b6d4', '#0891b2', '#0e7490', '#155e75'],
+    'slate': ['#cbd5e1', '#94a3b8', '#64748b', '#475569', '#334155', '#1e293b'],
+    'stone': ['#d6d3d1', '#a8a29e', '#78716c', '#57534e', '#44403c', '#292524'],
+}
+DEFAULT_SHADE = 2  # 500
+
+
+def shade_color(hue, shade=None):
+    return SHADES[hue][shade if shade is not None and 0 <= shade < 6 else DEFAULT_SHADE]
+
+
+def ensure_hues(cur):
+    """계열이 없는(잘못된) 사용자에게 아직 안 쓰인 계열을 직급순으로 배정·저장 → 이후 고정. {user_id: hue}"""
+    cur.execute(f"SELECT id, worklog_hue FROM users ORDER BY {rank_order()}")
+    rows = cur.fetchall()
+    used = {r["worklog_hue"] for r in rows if r["worklog_hue"] in SHADES}
+    free = [h for h in HUES if h not in used]
+    hue_of = {}
+    for r in rows:
+        hue = r["worklog_hue"]
+        if hue not in SHADES:
+            hue = free.pop(0) if free else HUES[r["id"] % len(HUES)]  # 계열이 다 차면 겹침 허용
+            cur.execute("UPDATE users SET worklog_hue = %s WHERE id = %s", (hue, r["id"]))
+        hue_of[r["id"]] = hue
+    return hue_of
 
 
 def has_perm(user, field):
@@ -92,24 +134,46 @@ def list_users(request: Request):
         raise HTTPException(status_code=403, detail="권한이 없습니다")
     with db_cursor() as cur:
         # admin 계정은 다른 사용자 목록에서 숨김 (본인은 표시)
-        cur.execute(f"SELECT id, name, position, worklog_color FROM users WHERE user_id <> %s OR id = %s ORDER BY {rank_order()}", (HIDDEN_LOGIN_ID, user["id"]))
-        return {"data": cur.fetchall()}
+        hue_of = ensure_hues(cur)
+        cur.execute(f"SELECT id, name, position FROM users WHERE user_id <> %s OR id = %s ORDER BY {rank_order()}", (HIDDEN_LOGIN_ID, user["id"]))
+        users = cur.fetchall()
+    for u in users:
+        u["hue"] = hue_of[u["id"]]
+        u["user_color"] = shade_color(u["hue"])
+    return {"data": users}
 
 
-@router.put("/work-logs/users/{user_id}/color")
-def set_user_color(user_id: int, data: ColorSave, request: Request):
-    """직원별 캘린더 색 지정 (관리자/업무일지관리자)"""
+@router.get("/work-logs/palette")
+def get_palette(request: Request):
+    """계열별 색 단계 + 내 계열 (작성 창 색 고르기용)"""
+    user = require_perm(request, "can_access_worklog")
+    with db_cursor() as cur:
+        hue_of = ensure_hues(cur)
+    return {
+        "hues": [{"key": h, "name": HUE_NAMES[h], "shades": SHADES[h]} for h in HUES],
+        "default_shade": DEFAULT_SHADE,
+        "my_hue": hue_of.get(user["id"]),
+    }
+
+
+@router.put("/work-logs/users/{user_id}/hue")
+def set_user_hue(user_id: int, data: HueSave, request: Request):
+    """직원별 색 계열 지정 (관리자/업무일지관리자) — 다른 사람이 쓰는 계열은 불가"""
     user = require_perm(request, "can_access_worklog")
     if not has_perm(user, "can_manage_worklog"):
         raise HTTPException(status_code=403, detail="권한이 없습니다")
-    if data.color is not None and not HEX_COLOR.match(data.color):
-        raise HTTPException(status_code=400, detail="색상 형식이 올바르지 않습니다")
+    if data.hue not in SHADES:
+        raise HTTPException(status_code=400, detail="알 수 없는 색 계열입니다")
     with db_cursor() as cur:
         cur.execute("SELECT id FROM users WHERE id = %s", (user_id,))
         if not cur.fetchone():
             raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
-        cur.execute("UPDATE users SET worklog_color = %s WHERE id = %s", (data.color.lower() if data.color else None, user_id))
-    return {"message": "색상이 저장되었습니다"}
+        cur.execute("SELECT name FROM users WHERE worklog_hue = %s AND id <> %s", (data.hue, user_id))
+        taken = cur.fetchone()
+        if taken:
+            raise HTTPException(status_code=400, detail=f"{HUE_NAMES[data.hue]} 계열은 이미 {taken['name']}님이 쓰고 있습니다")
+        cur.execute("UPDATE users SET worklog_hue = %s WHERE id = %s", (data.hue, user_id))
+    return {"message": "색 계열이 저장되었습니다"}
 
 
 @router.get("/work-logs/missing")
@@ -139,7 +203,7 @@ def search_work_logs(request: Request, q: str):
     like = "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
     sql = """SELECT i.id, i.content, i.item_order, m.id AS master_id, m.user_id,
                     m.start_date, m.end_date, m.is_multi_day,
-                    u.name AS user_name, u.position AS user_position, u.worklog_color AS user_color
+                    u.name AS user_name, u.position AS user_position
              FROM work_log_items i
              JOIN work_log_masters m ON i.master_id = m.id
              JOIN users u ON m.user_id = u.id
@@ -168,8 +232,8 @@ def list_work_logs(request: Request, start: date, end: date, user_id: Optional[i
         raise HTTPException(status_code=403, detail="업무일지는 작성자 본인 및 관리자만 열람 가능합니다.")
 
     sql = """SELECT m.id, m.user_id, m.start_date, m.end_date, m.is_multi_day,
-                    m.created_at, m.updated_at,
-                    u.name AS user_name, u.position AS user_position, u.worklog_color AS user_color
+                    m.created_at, m.updated_at, m.color_shade,
+                    u.name AS user_name, u.position AS user_position
              FROM work_log_masters m
              JOIN users u ON m.user_id = u.id
              WHERE m.start_date <= %s AND m.end_date >= %s"""
@@ -185,6 +249,7 @@ def list_work_logs(request: Request, start: date, end: date, user_id: Optional[i
     with db_cursor() as cur:
         cur.execute(sql, params)
         logs = cur.fetchall()
+        hue_of = ensure_hues(cur)
         visible_ids = [log["id"] for log in logs if can_view_all or log["user_id"] == user["id"]]
         items = []
         if visible_ids:
@@ -201,6 +266,9 @@ def list_work_logs(request: Request, start: date, end: date, user_id: Optional[i
         by_master.setdefault(item["master_id"], []).append(item)
     for log in logs:
         log["items"] = by_master.get(log["id"], [])
+        log["user_hue"] = hue_of[log["user_id"]]
+        log["color"] = shade_color(log["user_hue"], log["color_shade"])
+        log["user_color"] = shade_color(log["user_hue"])
     return {"data": logs}
 
 
@@ -214,8 +282,8 @@ def create_work_log(data: WorkLogSave, request: Request):
     with db_cursor() as cur:
         owner = resolve_owner(cur, user, data.user_id)
         cur.execute(
-            "INSERT INTO work_log_masters (user_id, start_date, end_date, is_multi_day) VALUES (%s, %s, %s, %s)",
-            (owner, start, end, start != end)
+            "INSERT INTO work_log_masters (user_id, start_date, end_date, is_multi_day, color_shade) VALUES (%s, %s, %s, %s, %s)",
+            (owner, start, end, start != end, data.color_shade)
         )
         master_id = cur.lastrowid
         insert_items(cur, master_id, items)
@@ -231,8 +299,8 @@ def update_work_log(master_id: int, data: WorkLogSave, request: Request):
         current_owner = check_access(cur, user, master_id, "can_edit_worklog")
         owner = resolve_owner(cur, user, data.user_id or current_owner)
         cur.execute(
-            "UPDATE work_log_masters SET user_id = %s, start_date = %s, end_date = %s, is_multi_day = %s WHERE id = %s",
-            (owner, start, end, start != end, master_id)
+            "UPDATE work_log_masters SET user_id = %s, start_date = %s, end_date = %s, is_multi_day = %s, color_shade = %s WHERE id = %s",
+            (owner, start, end, start != end, data.color_shade, master_id)
         )
         cur.execute("DELETE FROM work_log_items WHERE master_id = %s", (master_id,))
         insert_items(cur, master_id, items)

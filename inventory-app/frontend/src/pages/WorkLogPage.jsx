@@ -7,7 +7,7 @@ import { Modal, Btn, Field, inputCls } from '../components/Common.jsx'
 import DatePicker from '../components/DatePicker.jsx'
 import { goHub } from '../site.js'
 import { TitleInput, useMonthWheel, dragStyle } from '../components/MonthNav.jsx'
-import { setWorkLogUserColor, getWorkLogs, getWorkLogUsers, getWorkLogMissing, searchWorkLogs, createWorkLog, updateWorkLog, deleteWorkLog } from '../api.js'
+import { setWorkLogUserHue, getWorkLogPalette, getWorkLogs, getWorkLogUsers, getWorkLogMissing, searchWorkLogs, createWorkLog, updateWorkLog, deleteWorkLog } from '../api.js'
 
 const DATE_FMT = 'YYYY-MM-DD'
 const MONTH_WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
@@ -23,9 +23,6 @@ const weekLabel = (weekStart) => {
 
 const dayLabel = (d) => `${d.format('M/D')} (${MONTH_WEEKDAYS[d.day()]})`
 
-// 사용자별 캘린더 색: 지정색(worklog_color) 없으면 id로 기본 팔레트에서
-const PALETTE = ['#3b82f6', '#ef4444', '#22c55e', '#f97316', '#a855f7', '#14b8a6', '#ec4899', '#eab308', '#6366f1', '#0ea5e9', '#84cc16', '#64748b']
-const userColor = (id, color) => color || PALETTE[id % PALETTE.length]
 // 배경 밝기에 맞춘 글자색 (밝으면 검정, 어두우면 흰색)
 const textOn = (hex) => {
   const n = parseInt(hex.slice(1), 16)
@@ -71,7 +68,8 @@ export default function WorkLogPage() {
   const [loading, setLoading] = useState(false)
   const [editing, setEditing] = useState(null) // null | { log } | { date }
   const [reloadKey, setReloadKey] = useState(0)
-  const [showColors, setShowColors] = useState(false) // 직원별 색상 설정 창
+  const [showColors, setShowColors] = useState(false) // 직원별 색 계열 설정 창
+  const [palette, setPalette] = useState(null) // { hues: [{ key, name, shades[6] }], default_shade, my_hue }
   const [searchText, setSearchText] = useState('') // 입력 중인 검색어
   const [search, setSearch] = useState(null) // null | { q, rows, truncated, loading }
 
@@ -81,6 +79,9 @@ export default function WorkLogPage() {
     if (blocked || !canManage) return
     getWorkLogUsers().then(r => setUsers(r.data.data)).catch(() => {})
   }, [blocked, canManage])
+
+  const loadPalette = () => getWorkLogPalette().then(r => setPalette(r.data)).catch(() => {})
+  useEffect(() => { if (!blocked) loadPalette() }, [blocked])
 
   // 화면 범위: 월간 = 달력에 보이는 전체 칸, 주간 = 월~일, 일간 = 하루, 상세 = 해당 달
   const range = useMemo(() => {
@@ -317,8 +318,8 @@ export default function WorkLogPage() {
       </div>
 
       {showColors && (
-        <ColorModal users={users} onClose={() => setShowColors(false)}
-          onSaved={() => { getWorkLogUsers().then(r => setUsers(r.data.data)).catch(() => {}); setReloadKey(k => k + 1) }} />
+        <ColorModal users={users} palette={palette} onClose={() => setShowColors(false)}
+          onSaved={() => { getWorkLogUsers().then(r => setUsers(r.data.data)).catch(() => {}); loadPalette(); setReloadKey(k => k + 1) }} />
       )}
 
       {canWrite && !editing && (
@@ -337,6 +338,7 @@ export default function WorkLogPage() {
           canEditOwn={can('can_edit_worklog')}
           canDeleteOwn={can('can_delete_worklog')}
           users={users}
+          palette={palette}
           defaultUserId={isAdmin && personal ? targetUserId : user.id}
           onClose={() => setEditing(null)}
           onSaved={handleSaved}
@@ -443,7 +445,7 @@ function MonthView({ month, range, byDay, today, onDayClick, onOpenWeek, onMore,
                 )
               })}
               {bars.filter(b => b.lane < MAX_NAMES).map(({ log, col, span, lane, isStart, isEnd }) => {
-                const c = userColor(log.user_id, log.user_color)
+                const c = log.color
                 return (
                   <button
                     key={log.id}
@@ -490,7 +492,7 @@ function WeekView({ weekStart, byDay, today, onDayClick, onLogClick }) {
                   key={log.id}
                   onClick={e => { e.stopPropagation(); onLogClick(log) }}
                   className="rounded-lg border border-slate-200 bg-white p-2 hover:border-blue-300 hover:shadow-sm transition-all"
-                  style={{ borderLeft: `4px solid ${userColor(log.user_id, log.user_color)}` }}
+                  style={{ borderLeft: `4px solid ${log.color}` }}
                 >
                   <LogItems log={log} />
                 </div>
@@ -537,7 +539,7 @@ function DayView({ logs, onLogClick }) {
       {byUser.map(userLogs => (
         <div key={userLogs[0].user_id} className="bg-white rounded-xl border border-slate-200 shadow-sm">
           <div className="px-4 py-2.5 border-b border-slate-100 font-semibold text-slate-800 flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: userColor(userLogs[0].user_id, userLogs[0].user_color) }} />
+            <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: userLogs[0].user_color }} />
             {userLabel(userLogs[0])}
           </div>
           <div className="p-3 space-y-2">
@@ -630,7 +632,7 @@ function SearchView({ search, onClose, onPick }) {
   )
 }
 
-function WorkLogModal({ log, date, me, isAdmin, canEditOwn, canDeleteOwn, users, defaultUserId, onClose, onSaved }) {
+function WorkLogModal({ log, date, me, isAdmin, canEditOwn, canDeleteOwn, users, palette, defaultUserId, onClose, onSaved }) {
   const initialDate = date || dayjs().format(DATE_FMT)
   // 다른 사람 일지는 관리자만 수정/삭제 (업무일지관리자는 열람만)
   const own = !log || log.user_id === me.id
@@ -645,6 +647,12 @@ function WorkLogModal({ log, date, me, isAdmin, canEditOwn, canDeleteOwn, users,
     return list
   })
   const [saving, setSaving] = useState(false)
+  const [shade, setShade] = useState(log?.color_shade ?? null) // null = 기본 단계
+  // 색은 작성자 계열 안에서만: 작성자를 안 바꿨으면 그 일지의 계열, 아니면 직원 목록/내 계열
+  const ownerHue = log && log.user_id === userId ? log.user_hue
+    : users.find(u => u.id === userId)?.hue ?? (userId === me.id ? palette?.my_hue : null)
+  const hueInfo = palette?.hues.find(h => h.key === ownerHue)
+  const shadeIdx = shade ?? palette?.default_shade ?? 2
 
   const setItem = (idx, value) => setItems(items.map((v, i) => (i === idx ? value : v)))
 
@@ -655,7 +663,7 @@ function WorkLogModal({ log, date, me, isAdmin, canEditOwn, canDeleteOwn, users,
     if (endDate < start) return alert('종료일이 시작일보다 빠릅니다')
     if (!contents.length) return alert('업무 내용을 1개 이상 입력하세요')
 
-    const payload = { start_date: start, end_date: endDate, items: contents, user_id: userId }
+    const payload = { start_date: start, end_date: endDate, items: contents, user_id: userId, color_shade: shade }
     setSaving(true)
     try {
       if (log) {
@@ -724,6 +732,19 @@ function WorkLogModal({ log, date, me, isAdmin, canEditOwn, canDeleteOwn, users,
           </>
         )}
 
+        {hueInfo && (
+          <Field label="캘린더 색상" full>
+            <div className="flex items-center gap-2">
+              {hueInfo.shades.map((c, i) => (!readOnly || i === shadeIdx) && (
+                <button key={i} type="button" disabled={readOnly} onClick={() => setShade(i)} title={`${i + 1}단계`}
+                  className={`w-8 h-8 rounded-lg transition-transform disabled:cursor-default ${i === shadeIdx ? 'ring-2 ring-offset-2 ring-slate-700' : 'hover:scale-110'}`}
+                  style={{ backgroundColor: c }} />
+              ))}
+              <span className="text-xs text-slate-400 ml-1">{hueInfo.name} 계열</span>
+            </div>
+          </Field>
+        )}
+
         <Field label="업무 내용" full>
           <div className="space-y-2">
             {items.map((value, idx) => (
@@ -765,77 +786,47 @@ function WorkLogModal({ log, date, me, isAdmin, canEditOwn, canDeleteOwn, users,
   )
 }
 
-// 색상 표: 열 = 색상(빨 주 노 초 … 파 남 보 … 회색), 행 = 밝은 색 → 진한 색 (Tailwind 기본 색상 300~800)
-const PICKER_ROWS = [
-  ['#fca5a5', '#fdba74', '#fcd34d', '#fde047', '#bef264', '#86efac', '#5eead4', '#67e8f9', '#7dd3fc', '#93c5fd', '#a5b4fc', '#c4b5fd', '#d8b4fe', '#f9a8d4', '#d6d3d1', '#cbd5e1'],
-  ['#f87171', '#fb923c', '#fbbf24', '#facc15', '#a3e635', '#4ade80', '#2dd4bf', '#22d3ee', '#38bdf8', '#60a5fa', '#818cf8', '#a78bfa', '#c084fc', '#f472b6', '#a8a29e', '#94a3b8'],
-  ['#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#ec4899', '#78716c', '#64748b'],
-  ['#dc2626', '#ea580c', '#d97706', '#ca8a04', '#65a30d', '#16a34a', '#0d9488', '#0891b2', '#0284c7', '#2563eb', '#4f46e5', '#7c3aed', '#9333ea', '#db2777', '#57534e', '#475569'],
-  ['#b91c1c', '#c2410c', '#b45309', '#a16207', '#4d7c0f', '#15803d', '#0f766e', '#0e7490', '#0369a1', '#1d4ed8', '#4338ca', '#6d28d9', '#7e22ce', '#be185d', '#44403c', '#334155'],
-  ['#991b1b', '#9a3412', '#92400e', '#854d0e', '#3f6212', '#166534', '#115e59', '#155e75', '#075985', '#1e40af', '#3730a3', '#5b21b6', '#6b21a8', '#9d174d', '#292524', '#1e293b'],
-]
-
-// 관리자/업무일지관리자: 직원별 캘린더 색 지정 (고르면 바로 저장)
-function ColorModal({ users, onClose, onSaved }) {
+// 관리자/업무일지관리자: 직원별 색 계열 지정 (한 사람당 하나, 서로 겹치지 않게). 일지 색은 작성자가 그 계열 안에서 고름
+function ColorModal({ users, palette, onClose, onSaved }) {
   const [saving, setSaving] = useState(null)
-  const [openFor, setOpenFor] = useState(null) // 색상 표를 펼친 직원
-  const timer = useRef(null)
+  if (!palette) return null
+  const ownerOf = Object.fromEntries(users.map(u => [u.hue, u]))
 
-  const pick = async (u, color) => {
+  const pick = async (u, hue) => {
     setSaving(u.id)
     try {
-      await setWorkLogUserColor(u.id, color)
-      setOpenFor(null)
+      await setWorkLogUserHue(u.id, hue)
       onSaved()
     } catch (e) {
-      alert(e.response?.data?.detail || '색상을 저장하지 못했습니다')
+      alert(e.response?.data?.detail || '색 계열을 저장하지 못했습니다')
     } finally {
       setSaving(null)
     }
   }
-  // 직접 지정: 고르는 동안 값이 계속 바뀌므로 멈춘 뒤 한 번만 저장
-  const pickLater = (u, color) => {
-    clearTimeout(timer.current)
-    timer.current = setTimeout(() => pick(u, color), 500)
-  }
 
   return (
-    <Modal title="직원별 캘린더 색상" sub="지정하지 않으면 기본 색이 자동으로 정해집니다" onClose={onClose} size="lg"
-      footer={<Btn onClick={onClose}>닫기</Btn>}>
+    <Modal title="직원별 색 계열" sub="일지 색은 작성자가 자기 계열 안에서 고릅니다 · 다른 사람이 쓰는 계열은 고를 수 없습니다"
+      onClose={onClose} size="lg" footer={<Btn onClick={onClose}>닫기</Btn>}>
       <div className="divide-y divide-slate-100">
-        {users.map(u => {
-          const current = userColor(u.id, u.worklog_color)
-          return (
-            <div key={u.id} className={saving === u.id ? 'opacity-50' : ''}>
-              <div className="flex flex-wrap items-center gap-3 py-2.5">
-                <span className="w-28 flex-shrink-0 text-sm font-medium text-slate-800 truncate">{userLabel(u)}</span>
-                <span className="px-2 py-0.5 rounded text-[11px] font-medium" style={{ backgroundColor: current, color: textOn(current) }}>{u.name}</span>
-                <button onClick={() => setOpenFor(openFor === u.id ? null : u.id)} title="색상 표에서 고르기"
-                  className={`flex items-center gap-1 px-1.5 py-1 rounded-lg border hover:bg-slate-50 ${openFor === u.id ? 'border-blue-400' : 'border-slate-200'}`}>
-                  <span className="w-5 h-5 rounded" style={{ backgroundColor: current }} />
-                  <ChevronDown size={14} className="text-slate-400" />
-                </button>
-                <input type="color" key={current} defaultValue={current} onChange={e => pickLater(u, e.target.value)} title="직접 지정"
-                  className="w-7 h-7 rounded cursor-pointer border border-slate-200 p-0" />
-                {u.worklog_color && (
-                  <button onClick={() => pick(u, null)} className="text-xs text-slate-400 hover:text-slate-600">기본으로</button>
-                )}
-              </div>
-              {openFor === u.id && (
-                <div className="pb-3 overflow-x-auto">
-                  <div className="inline-grid gap-0.5 p-2 rounded-lg border border-slate-200 bg-white shadow-sm"
-                    style={{ gridTemplateColumns: `repeat(${PICKER_ROWS[0].length}, 1.25rem)` }}>
-                    {PICKER_ROWS.flat().map((c, i) => (
-                      <button key={i} onClick={() => pick(u, c)} title={c}
-                        className={`w-5 h-5 transition-transform ${current === c ? 'ring-2 ring-offset-1 ring-slate-800' : 'hover:scale-125'}`}
-                        style={{ backgroundColor: c }} />
-                    ))}
-                  </div>
-                </div>
-              )}
+        {users.map(u => (
+          <div key={u.id} className={`flex flex-wrap items-center gap-3 py-2.5 ${saving === u.id ? 'opacity-50' : ''}`}>
+            <span className="w-28 flex-shrink-0 text-sm font-medium text-slate-800 truncate">{userLabel(u)}</span>
+            <span className="w-12 flex-shrink-0 text-xs text-slate-500">{palette.hues.find(h => h.key === u.hue)?.name}</span>
+            <div className="flex flex-wrap gap-1.5">
+              {palette.hues.map(h => {
+                const mine = h.key === u.hue
+                const owner = ownerOf[h.key]
+                const taken = !!owner && !mine
+                return (
+                  <button key={h.key} disabled={taken || mine} onClick={() => pick(u, h.key)}
+                    title={taken ? `${h.name} — ${owner.name} 사용 중` : h.name}
+                    className={`w-6 h-6 rounded-md transition-transform ${mine ? 'ring-2 ring-offset-1 ring-slate-800' : taken ? 'opacity-20 cursor-not-allowed' : 'hover:scale-110'}`}
+                    style={{ backgroundColor: h.shades[palette.default_shade] }} />
+                )
+              })}
             </div>
-          )
-        })}
+          </div>
+        ))}
       </div>
     </Modal>
   )

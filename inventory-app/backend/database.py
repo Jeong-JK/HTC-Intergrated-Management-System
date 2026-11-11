@@ -242,7 +242,12 @@ ALTER TABLE users
     ADD COLUMN IF NOT EXISTS can_edit_worklog   BOOLEAN DEFAULT FALSE,
     ADD COLUMN IF NOT EXISTS can_delete_worklog BOOLEAN DEFAULT FALSE,
     ADD COLUMN IF NOT EXISTS can_manage_worklog BOOLEAN DEFAULT FALSE,
-    ADD COLUMN IF NOT EXISTS worklog_color      VARCHAR(7) DEFAULT NULL;
+    ADD COLUMN IF NOT EXISTS worklog_color      VARCHAR(7) DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS worklog_hue        VARCHAR(20) DEFAULT NULL;
+
+-- 업무일지별 캘린더 색: 작성자 계열(users.worklog_hue) 안의 단계 0~5 (NULL이면 기본 2)
+ALTER TABLE work_log_masters
+    ADD COLUMN IF NOT EXISTS color_shade TINYINT DEFAULT NULL;
 """
 
 def init_db():
