@@ -64,7 +64,7 @@ const SYSTEMS = [
 
 export default function MainHub() {
   const navigate = useNavigate()
-  const { user, logout } = useAuth()
+  const { user, logout, checkAuth } = useAuth()
   const [showProfile, setShowProfile] = useState(false)
   const [profileForm, setProfileForm] = useState({ email: '', phone: '', password: '', passwordConfirm: '' })
   const [profileError, setProfileError] = useState('')
@@ -224,6 +224,7 @@ export default function MainHub() {
     try {
       await updateProfile(updateData)
       setProfileSuccess('프로필이 수정되었습니다')
+      checkAuth() // 바뀐 이메일/전화번호 반영
       setProfileForm({ email: '', phone: '', password: '', passwordConfirm: '' })
       setTimeout(() => setShowProfile(false), 1500)
     } catch (e) {
@@ -482,8 +483,7 @@ export default function MainHub() {
                 </div>
               )}
 
-              {user?.is_admin ? (
-                <>
+              <>
                   <p className="text-xs text-slate-500">변경할 항목만 입력하세요</p>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1.5">
@@ -496,7 +496,7 @@ export default function MainHub() {
                       type="email"
                       value={profileForm.email}
                       onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
-                      placeholder="새 이메일 주소"
+                      placeholder={user?.email ? `현재: ${user.email}` : '새 이메일 주소'}
                       className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
@@ -512,42 +512,13 @@ export default function MainHub() {
                       type="tel"
                       value={profileForm.phone}
                       onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
-                      placeholder="새 전화번호"
+                      placeholder={user?.phone ? `현재: ${user.phone}` : '새 전화번호'}
                       className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
-                </>
-              ) : (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                      <div className="flex items-center gap-1.5">
-                        <Mail size={14} />
-                        이메일
-                      </div>
-                    </label>
-                    <div className="w-full px-4 py-2.5 border border-slate-200 rounded-lg bg-slate-50 text-slate-600">
-                      {user?.email || '-'}
-                    </div>
-                  </div>
+              </>
 
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                      <div className="flex items-center gap-1.5">
-                        <Phone size={14} />
-                        전화번호
-                      </div>
-                    </label>
-                    <div className="w-full px-4 py-2.5 border border-slate-200 rounded-lg bg-slate-50 text-slate-600">
-                      {user?.phone || '-'}
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-slate-500 text-center">이메일/전화번호 변경은 관리자에게 문의하세요</p>
-                </>
-              )}
-
-              <div className={user?.is_admin ? "border-t border-slate-200 pt-4 mt-4" : ""}>
+              <div className="border-t border-slate-200 pt-4 mt-4">
                 <p className="text-xs text-slate-500 mb-3">비밀번호 변경</p>
                 <div className="space-y-3">
                   <div>

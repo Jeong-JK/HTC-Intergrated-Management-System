@@ -339,10 +339,16 @@ def update_profile(data: ProfileUpdate, request: Request):
     values = []
 
     if data.email is not None:
+        data.email = data.email.strip()
+        if len(data.email) > 100:
+            raise HTTPException(status_code=400, detail="이메일이 너무 깁니다")
         updates.append("email = %s")
         values.append(data.email)
 
     if data.phone is not None:
+        data.phone = data.phone.strip()
+        if len(data.phone) > 30:
+            raise HTTPException(status_code=400, detail="전화번호가 너무 깁니다")
         updates.append("phone = %s")
         values.append(data.phone)
 
@@ -355,8 +361,15 @@ def update_profile(data: ProfileUpdate, request: Request):
 
     values.append(user_id)
 
+    # 로그인 때 저장한 세션 사본도 갱신 → 다시 로그인 안 해도 내 정보에 바로 반영
+    for key in ("email", "phone"):
+        if getattr(data, key) is not None:
+            current_user[key] = getattr(data, key)
+
     with db_cursor() as cur:
         cur.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = %s", values)
+        cur.execute("UPDATE sessions SET user_data = %s WHERE session_token = %s",
+                    (json.dumps(current_user), request.cookies.get("session_token")))
 
     return {"success": True, "message": "프로필이 수정되었습니다"}
 
