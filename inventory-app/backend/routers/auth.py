@@ -32,6 +32,16 @@ def verify_password(password: str, hashed: str) -> bool:
 def needs_rehash(hashed: str) -> bool:
     return not hashed.startswith(f"pbkdf2${PBKDF2_ITERATIONS}$")
 
+# 직원(users) 목록 정렬: 팀장 → 과장 → 대리 → 주임 → 사원, 같은 직급은 이름순, 그 외 직급은 맨 아래
+RANKS = ("팀장", "과장", "대리", "주임", "사원")
+
+
+def rank_order(position_col="position", name_col="name"):
+    """ORDER BY 에 넣을 식 (FIELD는 목록에 없으면 0 → 맨 아래로)"""
+    field = "FIELD(%s, %s)" % (position_col, ", ".join(f"'{r}'" for r in RANKS))
+    return f"{field} = 0, {field}, {name_col}"
+
+
 # ========== DB Session Functions ==========
 def get_session(session_token: str):
     """DB에서 세션 조회"""
@@ -244,7 +254,7 @@ def list_users(request: Request):
     # 권한 필드 포함하여 조회
     permission_cols = ', '.join(PERMISSION_FIELDS)
     with db_cursor() as cur:
-        cur.execute(f"SELECT id, user_id, name, position, email, phone, is_admin, {permission_cols}, created_at FROM users ORDER BY id")
+        cur.execute(f"SELECT id, user_id, name, position, email, phone, is_admin, {permission_cols}, created_at FROM users ORDER BY {rank_order()}")
         users = cur.fetchall()
 
     return {"users": users}

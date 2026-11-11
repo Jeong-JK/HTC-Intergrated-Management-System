@@ -5,7 +5,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from database import db_cursor
-from routers.auth import require_perm
+from routers.auth import rank_order, require_perm
 
 router = APIRouter(tags=["work_logs"])
 
@@ -92,7 +92,7 @@ def list_users(request: Request):
         raise HTTPException(status_code=403, detail="권한이 없습니다")
     with db_cursor() as cur:
         # admin 계정은 다른 사용자 목록에서 숨김 (본인은 표시)
-        cur.execute("SELECT id, name, position, worklog_color FROM users WHERE user_id <> %s OR id = %s ORDER BY name", (HIDDEN_LOGIN_ID, user["id"]))
+        cur.execute(f"SELECT id, name, position, worklog_color FROM users WHERE user_id <> %s OR id = %s ORDER BY {rank_order()}", (HIDDEN_LOGIN_ID, user["id"]))
         return {"data": cur.fetchall()}
 
 
@@ -122,7 +122,7 @@ def list_missing(request: Request, day: date):
                WHERE u.can_write_worklog = 1 AND u.user_id <> %s
                  AND NOT EXISTS (SELECT 1 FROM work_log_masters m
                                  WHERE m.user_id = u.id AND m.start_date <= %s AND m.end_date >= %s)
-               ORDER BY u.name""",
+               ORDER BY """ + rank_order("u.position", "u.name"),
             (HIDDEN_LOGIN_ID, day, day)
         )
         return {"data": cur.fetchall()}
@@ -148,7 +148,7 @@ def search_work_logs(request: Request, q: str):
     if not has_perm(user, "can_manage_worklog"):
         sql += " AND m.user_id = %s"
         params.append(user["id"])
-    sql += " ORDER BY m.start_date DESC, m.end_date DESC, u.name, m.id, i.item_order LIMIT %s"
+    sql += f" ORDER BY m.start_date DESC, m.end_date DESC, {rank_order('u.position', 'u.name')}, m.id, i.item_order LIMIT %s"
     params.append(SEARCH_LIMIT + 1)
     with db_cursor() as cur:
         cur.execute(sql, params)
@@ -180,7 +180,7 @@ def list_work_logs(request: Request, start: date, end: date, user_id: Optional[i
     if user_id:
         sql += " AND m.user_id = %s"
         params.append(user_id)
-    sql += " ORDER BY m.start_date, m.id"
+    sql += f" ORDER BY {rank_order('u.position', 'u.name')}, m.user_id, m.start_date, m.id"
 
     with db_cursor() as cur:
         cur.execute(sql, params)
