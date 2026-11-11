@@ -62,19 +62,36 @@ def shade_color(hue, shade=None):
     return SHADES[hue][shade if shade is not None and 0 <= shade < 6 else DEFAULT_SHADE]
 
 
+def _rgb(hex_color):
+    n = int(hex_color[1:], 16)
+    return (n >> 16, (n >> 8) & 255, n & 255)
+
+
+def nearest_hue(hex_color, candidates):
+    """예전에 지정한 색(worklog_color)과 가장 가까운 계열"""
+    target = _rgb(hex_color)
+    return min(candidates, key=lambda h: min(sum((a - b) ** 2 for a, b in zip(target, _rgb(c))) for c in SHADES[h]))
+
+
 def ensure_hues(cur):
-    """계열이 없는(잘못된) 사용자에게 아직 안 쓰인 계열을 직급순으로 배정·저장 → 이후 고정. {user_id: hue}"""
-    cur.execute(f"SELECT id, worklog_hue FROM users ORDER BY {rank_order()}")
+    """계열이 없는(잘못된) 사용자에게 아직 안 쓰인 계열을 배정·저장 → 이후 고정. {user_id: hue}
+    예전에 색을 지정해 둔 사람(worklog_color)은 그 색과 가장 가까운 계열을 먼저, 나머지는 직급순으로 남은 계열"""
+    cur.execute(f"SELECT id, worklog_hue, worklog_color FROM users ORDER BY {rank_order()}")
     rows = cur.fetchall()
     used = {r["worklog_hue"] for r in rows if r["worklog_hue"] in SHADES}
-    free = [h for h in HUES if h not in used]
-    hue_of = {}
-    for r in rows:
-        hue = r["worklog_hue"]
-        if hue not in SHADES:
-            hue = free.pop(0) if free else HUES[r["id"] % len(HUES)]  # 계열이 다 차면 겹침 허용
-            cur.execute("UPDATE users SET worklog_hue = %s WHERE id = %s", (hue, r["id"]))
+    hue_of = {r["id"]: r["worklog_hue"] for r in rows if r["worklog_hue"] in SHADES}
+    need = [r for r in rows if r["id"] not in hue_of]
+    for r in sorted(need, key=lambda r: not r["worklog_color"]):  # 지정색 있는 사람 먼저 (그 안에선 직급순 유지)
+        free = [h for h in HUES if h not in used]
+        if not free:
+            hue = HUES[r["id"] % len(HUES)]  # 계열이 다 차면 겹침 허용
+        elif r["worklog_color"]:
+            hue = nearest_hue(r["worklog_color"], free)
+        else:
+            hue = free[0]
+        used.add(hue)
         hue_of[r["id"]] = hue
+        cur.execute("UPDATE users SET worklog_hue = %s WHERE id = %s", (hue, r["id"]))
     return hue_of
 
 
