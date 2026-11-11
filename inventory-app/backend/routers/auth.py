@@ -35,8 +35,8 @@ def verify_password(password: str, hashed: str) -> bool:
 def needs_rehash(hashed: str) -> bool:
     return not hashed.startswith(f"pbkdf2${PBKDF2_ITERATIONS}$")
 
-# 직원(users) 목록 정렬: admin(관리자 계정) → 팀장 → 차장 → 과장 → 대리 → 주임 → 사원, 같은 직급은 이름순, 그 외 직급은 맨 아래
-RANKS = ("admin", "팀장", "차장", "과장", "대리", "주임", "사원")
+# 직원(users) 목록 정렬: admin(관리자 계정) → 대표 → 팀장 → 차장 → 과장 → 대리 → 주임 → 사원, 같은 직급은 이름순, 그 외 직급은 맨 아래
+RANKS = ("admin", "대표", "팀장", "차장", "과장", "대리", "주임", "사원")
 
 
 def rank_order(position_col="position", name_col="name"):
