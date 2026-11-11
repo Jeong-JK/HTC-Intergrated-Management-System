@@ -163,9 +163,8 @@ export default function MainHub() {
   const [maintTarget, setMaintTarget] = useState(null) // 설정 창을 연 시스템
   const [ops, setOps] = useState(null) // { system, action } 빌드/재시작 진행 창
   const askOps = (system, action) => {
-    const shared = system.id === 'inventory' || system.id === 'worklog' ? '\n(재고·업무일지·메인허브는 하나의 앱이라 같이 적용됩니다)' : ''
     const warn = action === 'restart' ? '\n재시작하는 몇 초 동안 사용자 접속이 끊깁니다.' : ''
-    if (window.confirm(`${system.title} — ${OPS_LABEL[action]}을 실행할까요?${shared}${warn}`)) setOps({ system, action })
+    if (window.confirm(`${system.title} — ${OPS_LABEL[action]}을 실행할까요?${warn}`)) setOps({ system, action })
   }
   const loadMaintenance = (lockedApp) => getMaintenance()
     .then(r => {
@@ -398,9 +397,26 @@ export default function MainHub() {
 
       {/* 메인 컨텐츠 */}
       <main className="max-w-7xl mx-auto px-3 sm:px-6 py-6 sm:py-12">
-        <div className="mb-10">
-          <h2 className="text-xl font-semibold text-slate-700">시스템 선택</h2>
-          <p className="text-slate-500 text-sm mt-1">사용할 시스템을 선택하세요</p>
+        <div className="mb-10 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold text-slate-700">시스템 선택</h2>
+            <p className="text-slate-500 text-sm mt-1">사용할 시스템을 선택하세요</p>
+          </div>
+          {user?.is_admin && (
+            <div className="flex flex-wrap gap-2">
+              {OPS_APPS.map(app => (
+                <div key={app.id} className="flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 bg-white border border-slate-200 rounded-lg">
+                  <span className="text-xs font-semibold text-slate-600 mr-1">{app.title}</span>
+                  {Object.entries(OPS_LABEL).map(([action, label]) => (
+                    <button key={action} onClick={() => askOps(app, action)}
+                      className="text-xs font-medium px-2.5 py-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50">
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -437,16 +453,6 @@ export default function MainHub() {
                   maint[system.id]?.locked ? 'bg-red-500 border-red-500 text-white hover:bg-red-600' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
                 {maint[system.id]?.locked ? '점검 해제' : '점검'}
               </button>
-            )}
-            {user?.is_admin && (
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                {Object.entries(OPS_LABEL).map(([action, label]) => (
-                  <button key={action} onClick={() => askOps(system, action)}
-                    className="text-xs font-medium py-2 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50">
-                    {label}
-                  </button>
-                ))}
-              </div>
             )}
             </div>
           ))}
@@ -652,11 +658,13 @@ function MaintenanceModal({ system, state, onClose, onSaved }) {
 }
 
 const OPS_LABEL = { build: '프론트 빌드', restart: '서버 재시작' }
+// 메인허브·재고·업무일지는 하나의 앱 → 버튼 한 묶음
+const OPS_APPS = [{ id: 'inventory', title: '메인허브·재고·업무일지' }, { id: 'sales', title: 'Sales Pipeline' }, { id: 'crm', title: 'CRM' }]
 
 // 관리자: 빌드/재시작 실행 후 1초마다 진행률 확인. 창을 닫아도 서버에서는 계속 진행
 function OpsModal({ system, action, onClose }) {
   const [job, setJob] = useState({ status: 'running', percent: 0, log: [] })
-  const shared = system.id === 'inventory' || system.id === 'worklog'
+  const shared = system.id === 'inventory'
 
   useEffect(() => {
     let timer, stopped = false, tries = 0
@@ -688,7 +696,7 @@ function OpsModal({ system, action, onClose }) {
 
   const done = job.status === 'done', failed = job.status === 'error'
   return (
-    <Modal title={`${system.title} ${OPS_LABEL[action]}`} sub={shared ? '재고·업무일지·메인허브 공통' : undefined} onClose={onClose}
+    <Modal title={`${system.title} ${OPS_LABEL[action]}`} onClose={onClose}
       footer={<>
         {done && shared && <Btn variant="primary" onClick={() => window.location.reload()}>새로고침</Btn>}
         <Btn onClick={onClose}>닫기</Btn>
