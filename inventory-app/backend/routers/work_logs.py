@@ -73,9 +73,13 @@ def nearest_hue(hex_color, candidates):
     return min(candidates, key=lambda h: min(sum((a - b) ** 2 for a, b in zip(target, _rgb(c))) for c in SHADES[h]))
 
 
+# 예전 화면이 색 미지정 사용자에게 쓰던 자동 색 (id % 12) — 기존 일지 색을 유지하려고 배정 때 참고
+LEGACY_AUTO = ['#3b82f6', '#ef4444', '#22c55e', '#f97316', '#a855f7', '#14b8a6', '#ec4899', '#eab308', '#6366f1', '#0ea5e9', '#84cc16', '#64748b']
+
+
 def ensure_hues(cur):
     """계열이 없는(잘못된) 사용자에게 아직 안 쓰인 계열을 배정·저장 → 이후 고정. {user_id: hue}
-    예전에 색을 지정해 둔 사람(worklog_color)은 그 색과 가장 가까운 계열을 먼저, 나머지는 직급순으로 남은 계열"""
+    예전에 보이던 색(지정색, 없으면 예전 자동색)과 가장 가까운 계열로. 지정색 있는 사람 먼저, 그 안에선 직급순"""
     cur.execute(f"SELECT id, worklog_hue, worklog_color FROM users ORDER BY {rank_order()}")
     rows = cur.fetchall()
     used = {r["worklog_hue"] for r in rows if r["worklog_hue"] in SHADES}
@@ -85,10 +89,8 @@ def ensure_hues(cur):
         free = [h for h in HUES if h not in used]
         if not free:
             hue = HUES[r["id"] % len(HUES)]  # 계열이 다 차면 겹침 허용
-        elif r["worklog_color"]:
-            hue = nearest_hue(r["worklog_color"], free)
         else:
-            hue = free[0]
+            hue = nearest_hue(r["worklog_color"] or LEGACY_AUTO[r["id"] % len(LEGACY_AUTO)], free)
         used.add(hue)
         hue_of[r["id"]] = hue
         cur.execute("UPDATE users SET worklog_hue = %s WHERE id = %s", (hue, r["id"]))
