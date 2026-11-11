@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { Package, TrendingUp, Users, LogOut, Settings, Shield, UserCog, X, Check, Mail, Phone, Lock, MessageSquare, Clock, Banknote, HardDrive, CalendarDays } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
-import { updateProfile, getUnreadPostCount, getUnreadCommentNotificationCount, getUsers, getMaintenance, saveMaintenance } from '../api.js'
+import { updateProfile, getUnreadPostCount, getUnreadCommentNotificationCount, getUsers, getMaintenance, saveMaintenance, runOps, getOpsStatus } from '../api.js'
 import { Modal, Btn } from '../components/Common.jsx'
 import logoImg from '../assets/HTC_logo.png'
 
@@ -161,6 +161,12 @@ export default function MainHub() {
   // 점검 모드: { inventory: { locked, can_enter, allowed_user_ids(관리자만) }, ... }
   const [maint, setMaint] = useState({})
   const [maintTarget, setMaintTarget] = useState(null) // 설정 창을 연 시스템
+  const [ops, setOps] = useState(null) // { system, action } 빌드/재시작 진행 창
+  const askOps = (system, action) => {
+    const shared = system.id === 'inventory' || system.id === 'worklog' ? '\n(재고·업무일지·메인허브는 하나의 앱이라 같이 적용됩니다)' : ''
+    const warn = action === 'restart' ? '\n재시작하는 몇 초 동안 사용자 접속이 끊깁니다.' : ''
+    if (window.confirm(`${system.title} — ${OPS_LABEL[action]}을 실행할까요?${shared}${warn}`)) setOps({ system, action })
+  }
   const loadMaintenance = (lockedApp) => getMaintenance()
     .then(r => {
       setMaint(r.data)
@@ -432,6 +438,16 @@ export default function MainHub() {
                 {maint[system.id]?.locked ? '점검 해제' : '점검'}
               </button>
             )}
+            {user?.is_admin && (
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                {Object.entries(OPS_LABEL).map(([action, label]) => (
+                  <button key={action} onClick={() => askOps(system, action)}
+                    className="text-xs font-medium py-2 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50">
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
             </div>
           ))}
         </div>
@@ -446,6 +462,7 @@ export default function MainHub() {
         <MaintenanceModal system={maintTarget} state={maint[maintTarget.id]} onClose={() => setMaintTarget(null)}
           onSaved={() => { setMaintTarget(null); loadMaintenance() }} />
       )}
+      {ops && <OpsModal system={ops.system} action={ops.action} onClose={() => setOps(null)} />}
 
       {/* 내 정보 수정 모달 */}
       {showProfile && (
@@ -629,6 +646,70 @@ function MaintenanceModal({ system, state, onClose, onSaved }) {
           </label>
         ))}
         {!users.length && <div className="px-3 py-4 text-sm text-slate-400 text-center">관리자 외 사용자가 없습니다</div>}
+      </div>
+    </Modal>
+  )
+}
+
+const OPS_LABEL = { build: '프론트 빌드', restart: '서버 재시작' }
+
+// 관리자: 빌드/재시작 실행 후 1초마다 진행률 확인. 창을 닫아도 서버에서는 계속 진행
+function OpsModal({ system, action, onClose }) {
+  const [job, setJob] = useState({ status: 'running', percent: 0, log: [] })
+  const shared = system.id === 'inventory' || system.id === 'worklog'
+
+  useEffect(() => {
+    let timer, stopped = false, tries = 0
+    // 재고 앱(이 서버 자신) 재시작: 응답 없이 꺼졌다 켜지므로, 켜진 시각(boot)이 요청 시각보다 뒤면 완료
+    const poll = (selfRestart, since) => {
+      timer = setTimeout(async () => {
+        tries += 1
+        try {
+          const { data } = await getOpsStatus()
+          if (selfRestart) {
+            if (data.boot > since) return setJob({ status: 'done', percent: 100, log: [] })
+          } else {
+            setJob(data.job)
+            if (data.job?.status !== 'running') return
+          }
+        } catch { /* 재시작 중엔 잠깐 응답 없음 */ }
+        if (selfRestart) {
+          if (tries > 60) return setJob(j => ({ ...j, status: 'error', error: '1분이 지나도 서버가 다시 켜지지 않았습니다 — SSH로 확인하세요' }))
+          setJob(j => ({ ...j, percent: Math.min(95, j.percent + 10) }))
+        }
+        if (!stopped) poll(selfRestart, since)
+      }, 1000)
+    }
+    runOps(system.id, action)
+      .then(({ data }) => { setJob(data.job); poll(data.self_restart, data.now) })
+      .catch(e => setJob({ status: 'error', percent: 0, log: [], error: e.response?.data?.detail || '실행하지 못했습니다' }))
+    return () => { stopped = true; clearTimeout(timer) }
+  }, [])
+
+  const done = job.status === 'done', failed = job.status === 'error'
+  return (
+    <Modal title={`${system.title} ${OPS_LABEL[action]}`} sub={shared ? '재고·업무일지·메인허브 공통' : undefined} onClose={onClose}
+      footer={<>
+        {done && shared && <Btn variant="primary" onClick={() => window.location.reload()}>새로고침</Btn>}
+        <Btn onClick={onClose}>닫기</Btn>
+      </>}>
+      <div className="space-y-3">
+        <div className="w-full bg-slate-200 rounded-full h-4 overflow-hidden">
+          <div className={`h-full transition-all duration-500 flex items-center justify-center text-xs text-white font-semibold ${failed ? 'bg-red-500' : done ? 'bg-green-500' : 'bg-blue-600'}`}
+            style={{ width: `${failed ? 100 : job.percent}%` }}>
+            {!failed && job.percent > 10 && `${job.percent}%`}
+          </div>
+        </div>
+        <div className={`text-center text-sm font-semibold ${failed ? 'text-red-600' : done ? 'text-green-600' : 'text-blue-600'}`}>
+          {failed ? job.error : done ? '완료!' : `${OPS_LABEL[action]} 중... ${job.percent}%`}
+        </div>
+        {done && action === 'build' && (
+          <p className="text-center text-xs text-slate-500">{shared ? '새로고침하면 바뀐 화면이 보입니다' : '해당 시스템을 새로고침하면 바뀐 화면이 보입니다'}</p>
+        )}
+        {!done && !failed && <p className="text-center text-xs text-slate-400">창을 닫아도 서버에서 계속 진행됩니다</p>}
+        {job.log?.length > 0 && (
+          <pre className="max-h-48 overflow-auto bg-slate-900 text-slate-100 text-[11px] leading-relaxed rounded-lg p-3 whitespace-pre-wrap break-all">{job.log.join('\n')}</pre>
+        )}
       </div>
     </Modal>
   )

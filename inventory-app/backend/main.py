@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 
 from config import APP_TITLE, APP_VERSION, CORS_ORIGINS, PIPELINE_DB_HOST, PIPELINE_DB_USER, PIPELINE_DB_PASSWORD, PIPELINE_DB_NAME
 from database import init_db
-from routers import items, rental, delivery, stats, inbound, rack, settings, companies, alerts, auth, posts, drive, work_logs, maintenance
+from routers import items, rental, delivery, stats, inbound, rack, settings, companies, alerts, auth, posts, drive, work_logs, maintenance, ops
 
 # 환율 캐시 (1시간마다 갱신)
 exchange_rate_cache = {"rate": None, "updated": None}
@@ -66,6 +66,7 @@ app.include_router(posts.router,     prefix="/api")
 app.include_router(drive.router,     prefix="/api")
 app.include_router(work_logs.router, prefix="/api")
 app.include_router(maintenance.router, prefix="/api")
+app.include_router(ops.router, prefix="/api")
 
 # 환율 API (exchangerate-api.com 사용)
 @app.get("/api/exchange-rate")
