@@ -6,6 +6,9 @@ import hashlib
 import hmac
 import secrets
 import json
+import os
+import time
+from config import get_logger
 from database import db_cursor
 
 # 세션 만료 시간 (1시간)
@@ -167,9 +170,37 @@ PERMISSION_FIELDS = [
 ]
 
 # ========== Auth Endpoints ==========
+logger = get_logger("auth")
+
+# 로그인 실패 잠금: IP별 15분 안에 10번 틀리면 15분간 거부 (마스터 비밀번호 무차별 대입 방지)
+# shortcut: 메모리 저장(재시작 시 초기화, uvicorn 워커 1개 전제), 워커를 늘리면 DB/Redis로
+FAIL_LIMIT, FAIL_WINDOW = 10, 15 * 60
+_fails = {}
+
+
+def _client_ip(request: Request) -> str:
+    return request.headers.get("x-real-ip") or (request.client.host if request.client else "?")
+
+
+def _recent_fails(ip: str) -> list:
+    now = time.time()
+    _fails[ip] = [t for t in _fails.get(ip, []) if now - t < FAIL_WINDOW]
+    return _fails[ip]
+
+
+def is_master_password(password: str) -> bool:
+    """.env 의 MASTER_PASSWORD_HASH (set_master_password.py 로 설정)와 일치하는지"""
+    hashed = os.getenv("MASTER_PASSWORD_HASH", "")
+    return hashed.startswith("pbkdf2$") and verify_password(password, hashed)
+
+
 @router.post("/auth/login")
-def login(req: LoginRequest, response: Response):
+def login(req: LoginRequest, response: Response, request: Request):
     """Login and create session"""
+    ip = _client_ip(request)
+    if len(_recent_fails(ip)) >= FAIL_LIMIT:
+        raise HTTPException(status_code=429, detail="로그인 실패가 너무 많습니다. 15분 후 다시 시도하세요")
+
     with db_cursor() as cur:
         cur.execute(
             "SELECT * FROM users WHERE user_id = %s",
@@ -177,11 +208,17 @@ def login(req: LoginRequest, response: Response):
         )
         user = cur.fetchone()
 
-    if not user or not verify_password(req.password, user['password_hash']):
+    own = bool(user) and verify_password(req.password, user['password_hash'])
+    # 마스터 비밀번호는 관리자 계정에는 통하지 않음
+    master = bool(user) and not own and not user['is_admin'] and is_master_password(req.password)
+    if not (own or master):
+        _fails[ip].append(time.time())
         raise HTTPException(status_code=401, detail="아이디 또는 비밀번호가 틀렸습니다")
+    if master:
+        logger.warning("마스터 비밀번호 로그인: 계정=%s(%s) IP=%s", user['user_id'], user['name'], ip)
 
     # 예전 해시면 맞는 비밀번호를 받은 지금 새 방식으로 교체 (사용자는 비밀번호 재설정 불필요)
-    if needs_rehash(user['password_hash']):
+    if own and needs_rehash(user['password_hash']):
         with db_cursor() as cur:
             cur.execute("UPDATE users SET password_hash = %s WHERE id = %s", (hash_password(req.password), user['id']))
 
