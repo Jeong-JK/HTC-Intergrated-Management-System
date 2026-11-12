@@ -3,7 +3,7 @@ import { Trash2, X } from 'lucide-react'
 import * as api from '../../api'
 
 // === Delete Company Modal ===
-const CONFIRM_TEXT = '직접 삭제합니다'
+const CONFIRM_TEXT = '삭제합니다.'
 
 export default function DeleteCompanyModal({ onClose, companies, onSuccess }) {
   const [selectedCompanyId, setSelectedCompanyId] = useState(null)
@@ -14,7 +14,7 @@ export default function DeleteCompanyModal({ onClose, companies, onSuccess }) {
   const dropdownRef = useRef(null)
   const [deleting, setDeleting] = useState(false)
   const [confirmText, setConfirmText] = useState('')
-  const confirmed = confirmText.trim().replace(/\.$/, '') === CONFIRM_TEXT // 끝의 마침표는 있어도 됨
+  const confirmed = confirmText.trim().replace(/\.$/, '') === CONFIRM_TEXT.replace(/\.$/, '') // 끝의 마침표는 없어도 됨
 
   const filteredCompanies = companies.filter(c =>
     c.name.toLowerCase().includes(searchTerm.toLowerCase())
