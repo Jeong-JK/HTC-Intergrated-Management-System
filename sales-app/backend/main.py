@@ -12,7 +12,7 @@ from activity_client import report_activity, take_snapshot
 
 logger = get_logger(__name__)
 from database import init_db, db_cursor
-from routers import projects, purchases, weekly, posts, sheets
+from routers import projects, purchases, weekly, posts, sheets, internal_undo
 
 app = FastAPI(title=APP_TITLE, version=APP_VERSION)
 
@@ -37,6 +37,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if (request.url.path.startswith("/assets/") or
             request.url.path.endswith(".png") or
             request.url.path.startswith("/api/purchases") or
+            request.url.path.startswith("/api/internal/") or  # 재고 서버 전용 (서버끼리 키 확인)
             request.url.path.startswith("/api/sheets/webhook/")):
             return await call_next(request)
 
@@ -120,6 +121,7 @@ app.include_router(projects.router, prefix="/api")
 app.include_router(weekly.router, prefix="/api")
 app.include_router(posts.router, prefix="/api")
 app.include_router(sheets.router, prefix="/api")
+app.include_router(internal_undo.router, prefix="/api")
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "../frontend/dist")
 if os.path.exists(STATIC_DIR):

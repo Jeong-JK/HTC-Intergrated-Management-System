@@ -277,6 +277,11 @@ ALTER TABLE activity_logs
     ADD COLUMN IF NOT EXISTS detail TEXT DEFAULT NULL,
     ADD COLUMN IF NOT EXISTS ref_table VARCHAR(40) DEFAULT NULL,  -- 상세 창에서 현재 정보를 찾을 표/행
     ADD COLUMN IF NOT EXISTS ref_id BIGINT DEFAULT NULL;
+
+-- 되돌리기: 바꾸기 전 원본(JSON, 30일 뒤 비움)과 되돌린 시각
+ALTER TABLE activity_logs
+    ADD COLUMN IF NOT EXISTS undo_data MEDIUMTEXT DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS undone_at DATETIME DEFAULT NULL;
 """
 
 def init_db():

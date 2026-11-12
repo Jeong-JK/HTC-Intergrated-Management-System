@@ -321,14 +321,14 @@ export default function MainHub() {
                 <span className="text-sm font-medium">내 정보</span>
               </button>
 
-              {/* 활동 로그: 관리자 또는 '활동 로그 조회' 권한 */}
-              {(user?.is_admin || user?.can_view_activity_log) && (
+              {/* 활동 로그: 관리자/'활동 로그 조회' 권한은 전체, 그 외엔 내 활동 (본인 것 되돌리기) */}
+              {user && (
                 <button
                   onClick={() => navigate('/activity-logs')}
                   className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 text-amber-700 rounded-lg hover:bg-amber-100 transition-colors"
                 >
                   <History size={18} />
-                  <span className="text-sm font-medium">활동 로그</span>
+                  <span className="text-sm font-medium">{user?.is_admin || user?.can_view_activity_log ? '활동 로그' : '내 활동'}</span>
                 </button>
               )}
 

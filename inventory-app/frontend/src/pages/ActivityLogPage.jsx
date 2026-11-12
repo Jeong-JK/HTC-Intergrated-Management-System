@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, History } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { Table, Btn, Modal, inputCls } from '../components/Common.jsx'
-import { getActivityLogs, getActivityRecord } from '../api.js'
+import { getActivityLogs, getActivityRecord, undoActivity } from '../api.js'
 
 const SYSTEMS = [['', '전체 시스템'], ['hub', '메인허브'], ['inventory', '재고'], ['worklog', '업무일지'], ['sales', 'Sales'], ['crm', 'CRM']]
 const fmt = (s) => (s ? s.replace('T', ' ').slice(0, 16) : '-')
@@ -17,11 +17,11 @@ function ago(s) {
   return h < 24 ? `${h}시간 전` : `${Math.floor(h / 24)}일 전`
 }
 
-// 관리자 또는 '활동 로그 조회' 권한: 사용자별 마지막 로그인 + 누가 언제 무엇을 추가/수정/삭제했는지
+// 관리자/'활동 로그 조회' 권한: 전체 기록 + 마지막 로그인. 그 외 사용자: 내 활동(본인 기록)만. 30일 안의 변경은 되돌리기
 export default function ActivityLogPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const allowed = user?.is_admin || user?.can_view_activity_log
+  const seeAll = user?.is_admin || user?.can_view_activity_log
   const [filters, setFilters] = useState({ user_id: '', system: '', start: '', end: '' })
   const [rows, setRows] = useState([])
   const [users, setUsers] = useState([])
@@ -45,7 +45,6 @@ export default function ActivityLogPage() {
   }
 
   useEffect(() => {
-    if (!allowed) { navigate('/'); return }
     load(0)
   }, [filters])
 
@@ -62,14 +61,14 @@ export default function ActivityLogPage() {
             <History size={22} className="text-amber-600" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-slate-800">활동 로그</h1>
-            <p className="text-xs text-slate-500">추가·수정·삭제와 로그인 기록 (6개월 보관) · 줄을 누르면 자세히 볼 수 있습니다</p>
+            <h1 className="text-lg font-bold text-slate-800">{seeAll ? '활동 로그' : '내 활동'}</h1>
+            <p className="text-xs text-slate-500">추가·수정·삭제와 로그인 기록 (6개월 보관) · 줄을 누르면 자세히 보고, 30일 안의 변경은 되돌릴 수 있습니다</p>
           </div>
         </div>
       </div>
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-        <section>
+        {seeAll && <section>
           <h2 className="text-sm font-semibold text-slate-700 mb-2">마지막 로그인</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
             {users.map(u => (
@@ -81,14 +80,16 @@ export default function ActivityLogPage() {
               </button>
             ))}
           </div>
-        </section>
+        </section>}
 
         <section className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <select value={filters.user_id} onChange={set('user_id')} className={`${inputCls} !w-auto`}>
-              <option value="">전체 사용자</option>
-              {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-            </select>
+            {seeAll && (
+              <select value={filters.user_id} onChange={set('user_id')} className={`${inputCls} !w-auto`}>
+                <option value="">전체 사용자</option>
+                {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+            )}
             <select value={filters.system} onChange={set('system')} className={`${inputCls} !w-auto`}>
               {SYSTEMS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
             </select>
@@ -108,7 +109,10 @@ export default function ActivityLogPage() {
                 <td className="px-4 py-2.5 whitespace-nowrap font-medium text-slate-800">{r.user_name}</td>
                 <td className="px-4 py-2.5 whitespace-nowrap">{r.system_name}</td>
                 <td className="px-4 py-2.5 whitespace-nowrap">{r.menu}</td>
-                <td className={`px-4 py-2.5 whitespace-nowrap font-medium ${r.method === 'DELETE' ? 'text-red-600' : r.method === 'LOGIN' ? 'text-slate-500' : 'text-blue-700'}`}>{r.action}</td>
+                <td className={`px-4 py-2.5 whitespace-nowrap font-medium ${r.method === 'DELETE' ? 'text-red-600' : r.method === 'LOGIN' ? 'text-slate-500' : r.method === 'UNDO' ? 'text-amber-600' : 'text-blue-700'}`}>
+                  {r.action}
+                  {r.undone_at && <span className="ml-1.5 text-[10px] font-normal px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">되돌림 완료</span>}
+                </td>
                 <td className="px-4 py-2.5 text-slate-700 break-all">{r.detail || '-'}</td>
                 <td className="px-4 py-2.5 whitespace-nowrap text-xs text-slate-400">{r.ip || '-'}</td>
               </tr>
@@ -124,25 +128,50 @@ export default function ActivityLogPage() {
           )}
         </section>
       </div>
-      {openId && <RecordModal id={openId} onClose={() => setOpenId(null)} />}
+      {openId && <RecordModal id={openId} onClose={() => setOpenId(null)} onChanged={() => load(0)} />}
     </div>
   )
 }
 
 // 상세 창: 이번 변경 + 그 항목의 현재 정보, [화면 열기]는 새 탭에서 그 항목으로 바로
-function RecordModal({ id, onClose }) {
+function RecordModal({ id, onClose, onChanged }) {
   const [data, setData] = useState(null)
+  const [undoing, setUndoing] = useState(false)
   useEffect(() => {
     getActivityRecord(id).then(r => setData(r.data))
       .catch(e => { alert(e.response?.data?.detail || '불러오지 못했습니다'); onClose() })
   }, [id])
   const log = data?.log
 
+  // 되돌리기: 그 뒤에 같은 항목이 다시 바뀌었으면 서버가 409 → 한 번 더 물어봄
+  const handleUndo = async () => {
+    if (!confirm(`이 변경을 되돌릴까요?\n\n${log.detail || `${log.menu} ${log.action}`}`)) return
+    setUndoing(true)
+    const run = async (force) => {
+      try {
+        await undoActivity(id, force)
+        alert('되돌렸습니다')
+        onChanged()
+        onClose()
+      } catch (e) {
+        if (e.response?.status === 409 && !force) {
+          if (confirm(`${e.response.data.detail}\n\n그래도 되돌릴까요?`)) return run(true)
+        } else {
+          alert(e.response?.data?.detail || '되돌리지 못했습니다')
+        }
+      }
+    }
+    await run(false)
+    setUndoing(false)
+  }
+
   return (
     <Modal title={log ? `${log.system_name} · ${log.menu} ${log.action}` : '불러오는 중...'}
       sub={log ? `${fmt(log.created_at)} · ${log.user_name}${log.ip ? ` · ${log.ip}` : ''}` : undefined}
       onClose={onClose} size="lg"
       footer={<>
+        {data?.can_undo && <Btn variant="yellow" onClick={handleUndo} disabled={undoing}>{undoing ? '되돌리는 중...' : '되돌리기'}</Btn>}
+        <div className="flex-1" />
         <Btn onClick={onClose}>닫기</Btn>
         {data?.link && <Btn variant="primary" onClick={() => window.open(data.link, '_blank', 'noopener')}>화면 열기 (새 탭)</Btn>}
       </>}>
@@ -151,6 +180,7 @@ function RecordModal({ id, onClose }) {
           <div>
             <div className="text-xs font-semibold text-slate-500 mb-1">이번 기록</div>
             <div className="text-sm text-slate-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 break-all">{log.detail || `${log.menu} ${log.action}`}</div>
+            {log.undone_at && <div className="text-xs text-slate-500 mt-1">{fmt(log.undone_at)}에 되돌린 기록입니다</div>}
           </div>
           <div>
             <div className="text-xs font-semibold text-slate-500 mb-1">현재 정보{data.name ? ` — ${data.name}` : ''}</div>
