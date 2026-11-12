@@ -1,5 +1,5 @@
 """HTC Partner CRM — FastAPI Main"""
-from activity_client import report_activity
+from activity_client import report_activity, take_snapshot
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -9,7 +9,7 @@ import os
 import httpx
 
 from config import APP_TITLE, APP_VERSION, CORS_ORIGINS
-from database import init_db
+from database import init_db, sales_db_cursor
 from routers import crm_companies, teams, contacts, meetings, dashboard, drive_files, google_drive
 from routers import quotations, purchase_orders, inventory_items
 
@@ -49,8 +49,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
                         # 인증 성공 - user 정보 저장
                         user_data = response.json()
                         request.state.user = user_data.get("user", {})
+                        snap = await take_snapshot(request, "crm", sales_db_cursor)
                         result = await call_next(request)
-                        await report_activity(request, "crm", result.status_code)
+                        await report_activity(request, "crm", result.status_code, snap, sales_db_cursor)
                         return result
                     if response.status_code == 423:
                         return locked_response(request, "crm", response.json().get("detail"))

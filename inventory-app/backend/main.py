@@ -14,6 +14,8 @@ from datetime import datetime, timedelta
 from config import APP_TITLE, APP_VERSION, CORS_ORIGINS, PIPELINE_DB_HOST, PIPELINE_DB_USER, PIPELINE_DB_PASSWORD, PIPELINE_DB_NAME
 from database import init_db
 from routers import items, rental, delivery, stats, inbound, rack, settings, companies, alerts, auth, posts, drive, work_logs, maintenance, ops, activity
+import audit
+from database import db_cursor
 
 # 환율 캐시 (1시간마다 갱신)
 exchange_rate_cache = {"rate": None, "updated": None}
@@ -51,13 +53,20 @@ async def maintenance_guard(request: Request, call_next):
 # 활동 로그: 성공한 추가/수정/삭제를 세션 주인 이름으로 기록 (기록 실패해도 응답은 그대로)
 @app.middleware("http")
 async def activity_logger(request: Request, call_next):
-    response = await call_next(request)
     path = request.url.path
+    snap = None
+    if request.method in activity.WRITE_METHODS:
+        try:  # 상세('무엇을 무엇으로')용으로 처리 전 대상 행 기억
+            snap = await run_in_threadpool(audit.before, db_cursor, "inventory", request.method, path)
+        except Exception as e:
+            print(f"활동 로그 상세 준비 실패: {e}")
+    response = await call_next(request)
     if activity.should_log(request.method, path, response.status_code):
         ip = request.headers.get("x-real-ip") or (request.client.host if request.client else None)
         try:
+            detail = await run_in_threadpool(audit.after, db_cursor, snap) if snap else None
             await run_in_threadpool(activity.record_session, request.cookies.get("session_token"),
-                                    activity.inventory_system(path), request.method, path, ip)
+                                    activity.inventory_system(path), request.method, path, ip, detail)
         except Exception as e:
             print(f"활동 로그 기록 실패: {e}")
     return response

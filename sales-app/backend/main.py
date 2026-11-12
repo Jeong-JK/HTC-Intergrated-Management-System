@@ -8,10 +8,10 @@ import os
 import httpx
 
 from config import APP_TITLE, APP_VERSION, CORS_ORIGINS, AUTH_SERVICE_URL, get_logger
-from activity_client import report_activity
+from activity_client import report_activity, take_snapshot
 
 logger = get_logger(__name__)
-from database import init_db
+from database import init_db, db_cursor
 from routers import projects, purchases, weekly, posts, sheets
 
 app = FastAPI(title=APP_TITLE, version=APP_VERSION)
@@ -71,8 +71,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
                             # HTML 페이지 요청은 메인 허브(inventory-app)로 리다이렉트
                             return RedirectResponse(url=AUTH_SERVICE_URL, status_code=302)
 
+                        snap = await take_snapshot(request, "sales", db_cursor)
                         result = await call_next(request)
-                        await report_activity(request, "sales", result.status_code)
+                        await report_activity(request, "sales", result.status_code, snap, db_cursor)
                         return result
                     if response.status_code == 423:
                         return locked_response(request, "sales", response.json().get("detail"))

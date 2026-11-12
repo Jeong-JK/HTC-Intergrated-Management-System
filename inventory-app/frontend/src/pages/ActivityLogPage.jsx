@@ -62,7 +62,7 @@ export default function ActivityLogPage() {
           </div>
           <div>
             <h1 className="text-lg font-bold text-slate-800">활동 로그</h1>
-            <p className="text-xs text-slate-500">추가·수정·삭제와 로그인 기록 (1년 보관)</p>
+            <p className="text-xs text-slate-500">추가·수정·삭제와 로그인 기록 (6개월 보관) · 줄을 누르면 새 탭에서 해당 화면이 열립니다</p>
           </div>
         </div>
       </div>
@@ -99,15 +99,17 @@ export default function ActivityLogPage() {
             )}
           </div>
 
-          <Table headers={['시간', '사용자', '시스템', '메뉴', '동작', '상세', 'IP']} cards>
+          <Table headers={['시간', '사용자', '시스템', '메뉴', '동작', '내용', 'IP']} cards>
             {rows.map(r => (
-              <tr key={r.id} className="border-b border-border last:border-0">
+              <tr key={r.id} onClick={() => r.link && window.open(r.link, '_blank', 'noopener')}
+                title={r.link ? '새 탭에서 열기' : undefined}
+                className={`border-b border-border last:border-0 ${r.link ? 'cursor-pointer hover:bg-amber-50' : ''}`}>
                 <td className="px-4 py-2.5 whitespace-nowrap text-slate-600">{fmt(r.created_at)}</td>
                 <td className="px-4 py-2.5 whitespace-nowrap font-medium text-slate-800">{r.user_name}</td>
                 <td className="px-4 py-2.5 whitespace-nowrap">{r.system_name}</td>
                 <td className="px-4 py-2.5 whitespace-nowrap">{r.menu}</td>
                 <td className={`px-4 py-2.5 whitespace-nowrap font-medium ${r.method === 'DELETE' ? 'text-red-600' : r.method === 'LOGIN' ? 'text-slate-500' : 'text-blue-700'}`}>{r.action}</td>
-                <td className="px-4 py-2.5 text-xs text-slate-400 break-all">{r.method === 'LOGIN' ? '-' : r.path.replace(/^\/api/, '')}</td>
+                <td className="px-4 py-2.5 text-slate-700 break-all">{r.detail || '-'}</td>
                 <td className="px-4 py-2.5 whitespace-nowrap text-xs text-slate-400">{r.ip || '-'}</td>
               </tr>
             ))}

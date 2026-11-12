@@ -271,6 +271,10 @@ CREATE TABLE IF NOT EXISTS activity_logs (
 ALTER TABLE users
     ADD COLUMN IF NOT EXISTS last_login_at DATETIME DEFAULT NULL,
     ADD COLUMN IF NOT EXISTS can_view_activity_log BOOLEAN DEFAULT FALSE;
+
+-- 활동 로그 상세: '홍길동 (현대로템) · 전화번호: 010-1 → 010-2' 처럼 한 줄
+ALTER TABLE activity_logs
+    ADD COLUMN IF NOT EXISTS detail TEXT DEFAULT NULL;
 """
 
 def init_db():
