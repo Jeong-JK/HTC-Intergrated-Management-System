@@ -7,7 +7,7 @@ import { Modal, Btn, Field, inputCls } from '../components/Common.jsx'
 import DatePicker from '../components/DatePicker.jsx'
 import { goHub } from '../site.js'
 import { TitleInput, useMonthWheel, dragStyle } from '../components/MonthNav.jsx'
-import { setWorkLogUserHue, getWorkLogPalette, getWorkLogs, getWorkLogUsers, getWorkLogMissing, searchWorkLogs, createWorkLog, updateWorkLog, deleteWorkLog } from '../api.js'
+import { setWorkLogUserHue, getWorkLogPalette, getWorkLogs, getWorkLogUsers, getWorkLogMissing, searchWorkLogs, createWorkLog, updateWorkLog, deleteWorkLog, getWorkLogGroup } from '../api.js'
 
 const DATE_FMT = 'YYYY-MM-DD'
 const MONTH_WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
@@ -639,13 +639,28 @@ function WorkLogModal({ log, date, me, isAdmin, canEditOwn, canDeleteOwn, users,
   const readOnly = !!log && !(isAdmin || (own && canEditOwn))
   const canDelete = !!log && (isAdmin || (own && canDeleteOwn))
   const [userId, setUserId] = useState(log?.user_id ?? defaultUserId ?? me.id)
-  const [start, setStart] = useState(log?.start_date ?? initialDate)
-  const [end, setEnd] = useState(log?.end_date ?? initialDate)
+  // 일지 날짜 = 항목 날짜 기본값. 항목 start/end 가 null 이면 이 날짜 하루, 값이 있으면 그 항목만의 기간
+  const [start, setStart] = useState(log ? (log.start_date === log.end_date ? log.start_date : initialDate) : initialDate)
   const [items, setItems] = useState(() => {
-    const list = log ? log.items.map(i => i.content) : []
-    while (!readOnly && list.length < 3) list.push('')
+    const own = log && log.start_date !== log.end_date ? { start: log.start_date, end: log.end_date } : { start: null, end: null }
+    const list = log ? log.items.map(i => ({ content: i.content, ...own })) : []
+    while (!readOnly && list.length < 3) list.push({ content: '', start: null, end: null })
     return list
   })
+  const [lines, setLines] = useState(1) // 같이 작성한 줄(기간) 수 — 삭제 안내용
+  // 수정/보기: 같이 작성한 항목 전체를 불러옴 (기간이 다른 항목은 캘린더에서 다른 줄)
+  useEffect(() => {
+    if (!log) return
+    getWorkLogGroup(log.id).then(({ data }) => {
+      const singles = data.data.filter(i => i.start_date === i.end_date).map(i => i.start_date).sort()
+      const base = singles[0] ?? log.start_date
+      setStart(base)
+      setLines(data.lines)
+      setItems(data.data.map(i => i.start_date === base && i.end_date === base
+        ? { content: i.content, start: null, end: null }
+        : { content: i.content, start: i.start_date, end: i.end_date }))
+    }).catch(() => {})
+  }, [])
   const [saving, setSaving] = useState(false)
   const [shade, setShade] = useState(log?.color_shade ?? null) // null = 기본 단계
   // 색은 작성자 계열 안에서만: 작성자를 안 바꿨으면 그 일지의 계열, 아니면 직원 목록/내 계열
@@ -654,16 +669,17 @@ function WorkLogModal({ log, date, me, isAdmin, canEditOwn, canDeleteOwn, users,
   const hueInfo = palette?.hues.find(h => h.key === ownerHue)
   const shadeIdx = shade ?? palette?.default_shade ?? 2
 
-  const setItem = (idx, value) => setItems(items.map((v, i) => (i === idx ? value : v)))
+  const setItem = (idx, patch) => setItems(items.map((v, i) => (i === idx ? { ...v, ...patch } : v)))
+  const rangeText = (it) => it.start === it.end ? it.start : `${it.start} ~ ${it.end}`
 
   const handleSave = async () => {
-    const contents = items.map(s => s.trim()).filter(Boolean)
-    if (!start) return alert('시작일을 선택하세요')
-    const endDate = end || start
-    if (endDate < start) return alert('종료일이 시작일보다 빠릅니다')
-    if (!contents.length) return alert('업무 내용을 1개 이상 입력하세요')
+    if (!start) return alert('날짜를 선택하세요')
+    const list = items.filter(it => it.content.trim())
+      .map(it => ({ content: it.content.trim(), start_date: it.start || start, end_date: it.end || it.start || start }))
+    if (list.some(it => it.end_date < it.start_date)) return alert('종료일이 시작일보다 빠른 항목이 있습니다')
+    if (!list.length) return alert('업무 내용을 1개 이상 입력하세요')
 
-    const payload = { start_date: start, end_date: endDate, items: contents, user_id: userId, color_shade: shade }
+    const payload = { start_date: start, items: list, user_id: userId, color_shade: shade }
     setSaving(true)
     try {
       if (log) {
@@ -680,9 +696,11 @@ function WorkLogModal({ log, date, me, isAdmin, canEditOwn, canDeleteOwn, users,
   }
 
   const handleDelete = async () => {
-    const msg = log.is_multi_day
-      ? `기간(${log.start_date} ~ ${log.end_date}) 전체 업무일지가 삭제됩니다. 삭제하시겠습니까?`
-      : '이 업무일지를 삭제하시겠습니까?'
+    const msg = lines > 1
+      ? `같이 작성한 항목 전체(캘린더 ${lines}줄)가 삭제됩니다. 삭제하시겠습니까?`
+      : log.is_multi_day
+        ? `기간(${log.start_date} ~ ${log.end_date}) 전체 업무일지가 삭제됩니다. 삭제하시겠습니까?`
+        : '이 업무일지를 삭제하시겠습니까?'
     if (!confirm(msg)) return
     try {
       await deleteWorkLog(log.id)
@@ -695,7 +713,7 @@ function WorkLogModal({ log, date, me, isAdmin, canEditOwn, canDeleteOwn, users,
   return (
     <Modal
       title={readOnly ? '업무일지 보기' : log ? '업무일지 수정' : '업무일지 작성'}
-      sub={readOnly ? '열람 전용입니다' : '기간을 지정하면 모든 날짜에 같은 업무가 등록됩니다'}
+      sub={readOnly ? '열람 전용입니다' : '항목마다 기간을 따로 지정할 수 있습니다 (기본은 위 날짜 하루)'}
       onClose={onClose}
       size="lg"
       footer={
@@ -717,20 +735,11 @@ function WorkLogModal({ log, date, me, isAdmin, canEditOwn, canDeleteOwn, users,
             <div className={`${inputCls} bg-slate-50`}>{log ? userLabel(log) : me.name}</div>
           )}
         </Field>
-        {readOnly ? (
-          <Field label="기간" full>
-            <div className={`${inputCls} bg-slate-50`}>{start === end ? start : `${start} ~ ${end}`}</div>
-          </Field>
-        ) : (
-          <>
-            <Field label="시작일">
-              <DatePicker value={start} onChange={v => { setStart(v); if (v && (!end || end < v)) setEnd(v) }} />
-            </Field>
-            <Field label="종료일">
-              <DatePicker value={end} onChange={setEnd} />
-            </Field>
-          </>
-        )}
+        <Field label="날짜" full>
+          {readOnly
+            ? <div className={`${inputCls} bg-slate-50`}>{start}</div>
+            : <div className="w-44"><DatePicker value={start} onChange={setStart} /></div>}
+        </Field>
 
         {hueInfo && (
           <Field label="캘린더 색상" full>
@@ -747,17 +756,36 @@ function WorkLogModal({ log, date, me, isAdmin, canEditOwn, canDeleteOwn, users,
 
         <Field label="업무 내용" full>
           <div className="space-y-2">
-            {items.map((value, idx) => (
+            {items.map((it, idx) => (
               <div key={idx} className="flex items-start gap-2">
                 <span className="w-5 text-right text-xs text-slate-400 pt-2.5">{idx + 1}.</span>
-                <textarea
-                  rows={2}
-                  value={value}
-                  readOnly={readOnly}
-                  onChange={e => setItem(idx, e.target.value)}
-                  placeholder={readOnly ? '' : '업무 내용을 입력하세요'}
-                  className={`${inputCls} resize-y ${readOnly ? 'bg-slate-50' : ''}`}
-                />
+                <div className="flex-1 min-w-0 space-y-1.5">
+                  <textarea
+                    rows={2}
+                    value={it.content}
+                    readOnly={readOnly}
+                    onChange={e => setItem(idx, { content: e.target.value })}
+                    placeholder={readOnly ? '' : '업무 내용을 입력하세요'}
+                    className={`${inputCls} resize-y ${readOnly ? 'bg-slate-50' : ''}`}
+                  />
+                  {it.start ? (readOnly ? (
+                    <span className="inline-block px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-xs font-medium">{rangeText(it)}</span>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                      <div className="w-36"><DatePicker value={it.start}
+                        onChange={v => setItem(idx, v ? { start: v, end: it.end < v ? v : it.end } : { start: null, end: null })} /></div>
+                      <span>~</span>
+                      <div className="w-36"><DatePicker value={it.end} onChange={v => setItem(idx, { end: v || it.start })} /></div>
+                      <button type="button" onClick={() => setItem(idx, { start: null, end: null })}
+                        className="px-2 py-1 rounded hover:bg-slate-100 text-slate-500">기본 날짜로</button>
+                    </div>
+                  )) : !readOnly && (
+                    <button type="button" onClick={() => setItem(idx, { start: start, end: start })}
+                      className="flex items-center gap-1 text-xs text-slate-400 hover:text-blue-600">
+                      <CalendarDays size={12} /> {start || '날짜'} 하루 · 기간 따로 지정
+                    </button>
+                  )}
+                </div>
                 {!readOnly && items.length > 1 && (
                   <button
                     type="button"
@@ -773,7 +801,7 @@ function WorkLogModal({ log, date, me, isAdmin, canEditOwn, canDeleteOwn, users,
             {!readOnly && (
               <button
                 type="button"
-                onClick={() => setItems([...items, ''])}
+                onClick={() => setItems([...items, { content: '', start: null, end: null }])}
                 className="ml-7 flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 font-medium"
               >
                 <Plus size={14} /> 항목 추가

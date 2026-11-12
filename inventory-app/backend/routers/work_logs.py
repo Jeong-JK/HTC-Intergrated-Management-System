@@ -1,6 +1,6 @@
 """HTC Inventory — 업무일지 캘린더 Router"""
 from datetime import date
-from typing import List, Optional
+from typing import List, Optional, Union
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 from database import db_cursor
@@ -21,10 +21,16 @@ HIDDEN_LOGIN_ID = "admin"  # 이 계정(로그인 아이디)의 존재/업무일
 # 다른 사용자 대리 작성/수정/삭제는 관리자만
 
 
+class WorkLogItemIn(BaseModel):
+    content: str
+    start_date: Optional[date] = None  # 비우면 일지 날짜
+    end_date: Optional[date] = None    # 비우면 항목 시작일 하루
+
+
 class WorkLogSave(BaseModel):
-    start_date: date
-    end_date: Optional[date] = None
-    items: List[str]
+    start_date: date                   # 일지 날짜 (항목 날짜 기본값)
+    end_date: Optional[date] = None    # 예전 화면(항목이 문자열)용 기간
+    items: List[Union[WorkLogItemIn, str]]
     user_id: Optional[int] = None  # 관리자 대리 작성 시 대상 직원
     color_shade: Optional[int] = Field(None, ge=0, le=5)  # 작성자 계열 안의 색 단계 (None = 기본)
 
@@ -129,20 +135,55 @@ def check_access(cur, user, master_id, perm_field):
 
 
 def clean(data: WorkLogSave):
-    end = data.end_date or data.start_date
-    if end < data.start_date:
-        raise HTTPException(status_code=400, detail="종료일이 시작일보다 빠릅니다")
-    items = [s.strip() for s in data.items if s and s.strip()]
-    if not items:
+    """항목을 기간별로 묶음 → {(시작, 종료): [(전체 순서, 내용)]} (처음 나온 기간 순)"""
+    groups = {}
+    for order, item in enumerate(data.items, 1):
+        if isinstance(item, str):
+            item = WorkLogItemIn(content=item, start_date=data.start_date, end_date=data.end_date)
+        content = item.content.strip()
+        if not content:
+            continue
+        start = item.start_date or data.start_date
+        end = item.end_date or start
+        if end < start:
+            raise HTTPException(status_code=400, detail="종료일이 시작일보다 빠릅니다")
+        groups.setdefault((start, end), []).append((order, content))
+    if not groups:
         raise HTTPException(status_code=400, detail="업무 내용을 1개 이상 입력하세요")
-    return data.start_date, end, items
+    return groups
 
 
-def insert_items(cur, master_id, items):
-    cur.executemany(
-        "INSERT INTO work_log_items (master_id, item_order, content) VALUES (%s, %s, %s)",
-        [(master_id, i + 1, content) for i, content in enumerate(items)]
-    )
+def save_groups(cur, owner, groups, shade, created_at=None):
+    """기간마다 줄 1개, 2줄 이상이면 group_id 로 묶음. 첫 줄 id 반환"""
+    ids = []
+    for (start, end), items in groups.items():
+        cur.execute(
+            """INSERT INTO work_log_masters (user_id, start_date, end_date, is_multi_day, color_shade, created_at)
+               VALUES (%s, %s, %s, %s, %s, COALESCE(%s, NOW()))""",
+            (owner, start, end, start != end, shade, created_at)
+        )
+        ids.append(cur.lastrowid)
+        cur.executemany(
+            "INSERT INTO work_log_items (master_id, item_order, content) VALUES (%s, %s, %s)",
+            [(ids[-1], order, content) for order, content in items]
+        )
+    if len(ids) > 1:
+        cur.execute(f"UPDATE work_log_masters SET group_id = %s WHERE id IN ({','.join(['%s'] * len(ids))})", [ids[0], *ids])
+    return ids[0]
+
+
+def group_ids(cur, master_id):
+    """같이 작성한 줄 id 목록 (묶음이 없으면 자기 자신만)"""
+    cur.execute("SELECT COALESCE(group_id, id) AS g FROM work_log_masters WHERE id = %s", (master_id,))
+    row = cur.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="업무일지를 찾을 수 없습니다")
+    cur.execute("SELECT id FROM work_log_masters WHERE id = %s OR group_id = %s", (row["g"], row["g"]))
+    return [r["id"] for r in cur.fetchall()]
+
+
+def in_ids(ids):
+    return ",".join(["%s"] * len(ids))
 
 
 @router.get("/work-logs/users")
@@ -291,45 +332,62 @@ def list_work_logs(request: Request, start: date, end: date, user_id: Optional[i
     return {"data": logs}
 
 
+@router.get("/work-logs/{master_id}/group")
+def get_work_log_group(master_id: int, request: Request):
+    """같이 작성한 항목 전체 (항목별 기간 포함, 작성 순서대로) — 작성/수정 창용. 열람 권한은 목록과 같음"""
+    user = require_perm(request, "can_access_worklog")
+    with db_cursor() as cur:
+        ids = group_ids(cur, master_id)
+        cur.execute(
+            f"""SELECT i.content, i.item_order, m.start_date, m.end_date, m.user_id, u.user_id AS login_id
+                FROM work_log_items i
+                JOIN work_log_masters m ON i.master_id = m.id
+                JOIN users u ON m.user_id = u.id
+                WHERE m.id IN ({in_ids(ids)}) ORDER BY i.item_order, m.start_date""",
+            ids
+        )
+        items = cur.fetchall()
+    if items and items[0]["user_id"] != user["id"] and (
+            items[0]["login_id"] == HIDDEN_LOGIN_ID or not has_perm(user, "can_manage_worklog")):
+        raise HTTPException(status_code=403, detail="업무일지는 작성자 본인 및 관리자만 열람 가능합니다.")
+    return {"data": [{k: i[k] for k in ("content", "start_date", "end_date")} for i in items], "lines": len(ids)}
+
+
 @router.post("/work-logs")
 def create_work_log(data: WorkLogSave, request: Request):
-    """작성 — 기간 지정 시 전체 기간에 같은 항목 적용 (마스터 1건으로 묶음)"""
+    """작성 — 항목마다 기간 지정 가능 (기간별로 줄을 나눠 한 묶음으로 저장)"""
     user = require_perm(request, "can_access_worklog")
     if not has_perm(user, "can_write_worklog"):
         raise HTTPException(status_code=403, detail="업무일지 작성 권한이 없습니다")
-    start, end, items = clean(data)
+    groups = clean(data)
     with db_cursor() as cur:
         owner = resolve_owner(cur, user, data.user_id)
-        cur.execute(
-            "INSERT INTO work_log_masters (user_id, start_date, end_date, is_multi_day, color_shade) VALUES (%s, %s, %s, %s, %s)",
-            (owner, start, end, start != end, data.color_shade)
-        )
-        master_id = cur.lastrowid
-        insert_items(cur, master_id, items)
+        master_id = save_groups(cur, owner, groups, data.color_shade)
     return {"id": master_id, "message": "업무일지가 저장되었습니다"}
 
 
 @router.put("/work-logs/{master_id}")
 def update_work_log(master_id: int, data: WorkLogSave, request: Request):
-    """수정 — 항목은 통째로 교체"""
+    """수정 — 같이 작성한 묶음 전체를 통째로 교체 (처음 작성 시각은 유지)"""
     user = require_perm(request, "can_access_worklog")
-    start, end, items = clean(data)
+    groups = clean(data)
     with db_cursor() as cur:
         current_owner = check_access(cur, user, master_id, "can_edit_worklog")
         owner = resolve_owner(cur, user, data.user_id or current_owner)
-        cur.execute(
-            "UPDATE work_log_masters SET user_id = %s, start_date = %s, end_date = %s, is_multi_day = %s, color_shade = %s WHERE id = %s",
-            (owner, start, end, start != end, data.color_shade, master_id)
-        )
-        cur.execute("DELETE FROM work_log_items WHERE master_id = %s", (master_id,))
-        insert_items(cur, master_id, items)
-    return {"id": master_id, "message": "업무일지가 수정되었습니다"}
+        ids = group_ids(cur, master_id)
+        cur.execute(f"SELECT MIN(created_at) AS c FROM work_log_masters WHERE id IN ({in_ids(ids)})", ids)
+        created_at = cur.fetchone()["c"]
+        cur.execute(f"DELETE FROM work_log_masters WHERE id IN ({in_ids(ids)})", ids)  # 항목은 FK CASCADE
+        new_id = save_groups(cur, owner, groups, data.color_shade, created_at)
+    return {"id": new_id, "message": "업무일지가 수정되었습니다"}
 
 
 @router.delete("/work-logs/{master_id}")
 def delete_work_log(master_id: int, request: Request):
+    """삭제 — 같이 작성한 묶음 전체"""
     user = require_perm(request, "can_access_worklog")
     with db_cursor() as cur:
         check_access(cur, user, master_id, "can_delete_worklog")
-        cur.execute("DELETE FROM work_log_masters WHERE id = %s", (master_id,))
+        ids = group_ids(cur, master_id)
+        cur.execute(f"DELETE FROM work_log_masters WHERE id IN ({in_ids(ids)})", ids)
     return {"message": "업무일지가 삭제되었습니다"}

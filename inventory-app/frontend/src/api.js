@@ -137,3 +137,4 @@ export const searchWorkLogs  = (q)      => api.get('/work-logs/search', { params
 export const createWorkLog   = (data)   => api.post('/work-logs', data)
 export const updateWorkLog   = (id, d)  => api.put(`/work-logs/${id}`, d)
 export const deleteWorkLog   = (id)     => api.delete(`/work-logs/${id}`)
+export const getWorkLogGroup = (id)     => api.get(`/work-logs/${id}/group`)

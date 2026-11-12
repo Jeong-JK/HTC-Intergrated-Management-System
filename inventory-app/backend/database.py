@@ -248,6 +248,11 @@ ALTER TABLE users
 -- 업무일지별 캘린더 색: 작성자 계열(users.worklog_hue) 안의 단계 0~5 (NULL이면 기본 2)
 ALTER TABLE work_log_masters
     ADD COLUMN IF NOT EXISTS color_shade TINYINT DEFAULT NULL;
+
+-- 한 번에 작성했지만 기간이 달라 여러 줄이 된 일지 묶음 = 묶음 첫 줄 id (혼자면 NULL)
+ALTER TABLE work_log_masters
+    ADD COLUMN IF NOT EXISTS group_id BIGINT DEFAULT NULL,
+    ADD INDEX IF NOT EXISTS idx_wlm_group (group_id);
 """
 
 def init_db():
