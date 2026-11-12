@@ -164,7 +164,8 @@ export default function MainHub() {
   const [ops, setOps] = useState(null) // { system, action } 빌드/재시작 진행 창
   const askOps = (system, action) => {
     const warn = action === 'restart' ? '\n재시작하는 몇 초 동안 사용자 접속이 끊깁니다.' : ''
-    if (window.confirm(`${system.title} — ${OPS_LABEL[action]}을 실행할까요?${warn}`)) setOps({ system, action })
+    const what = system.id === 'all' ? '메인허브·재고·업무일지, Sales, CRM 프론트를 차례로 빌드' : `${OPS_LABEL[action]}${action === 'build' ? '를' : '을'} 실행`
+    if (window.confirm(`${system.title} — ${what}할까요?${warn}`)) setOps({ system, action })
   }
   const loadMaintenance = (lockedApp) => getMaintenance()
     .then(r => {
@@ -423,10 +424,12 @@ export default function MainHub() {
                       className={`text-xs font-semibold px-3 py-1.5 rounded-md border bg-white ${app.outline}`}>
                       {OPS_LABEL.build}
                     </button>
-                    <button onClick={() => askOps(app, 'restart')}
-                      className={`text-xs font-semibold px-3 py-1.5 rounded-md text-white ${app.solid}`}>
-                      {OPS_LABEL.restart}
-                    </button>
+                    {app.id !== 'all' && (
+                      <button onClick={() => askOps(app, 'restart')}
+                        className={`text-xs font-semibold px-3 py-1.5 rounded-md text-white ${app.solid}`}>
+                        {OPS_LABEL.restart}
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -682,12 +685,15 @@ const OPS_APPS = [
     outline: 'border-green-300 text-green-700 hover:bg-green-100', solid: 'bg-green-600 hover:bg-green-700' },
   { id: 'crm', title: 'CRM', box: 'border-purple-200 bg-purple-50', text: 'text-purple-700',
     outline: 'border-purple-300 text-purple-700 hover:bg-purple-100', solid: 'bg-purple-600 hover:bg-purple-700' },
+  // 세 앱 프론트를 차례로 (재시작은 필요 없음)
+  { id: 'all', title: '전체', box: 'border-slate-300 bg-slate-50', text: 'text-slate-700',
+    outline: 'border-slate-400 text-slate-700 hover:bg-slate-100' },
 ]
 
 // 관리자: 빌드/재시작 실행 후 1초마다 진행률 확인. 창을 닫아도 서버에서는 계속 진행
 function OpsModal({ system, action, onClose }) {
   const [job, setJob] = useState({ status: 'running', percent: 0, log: [] })
-  const shared = system.id === 'inventory'
+  const shared = system.id === 'inventory' || system.id === 'all' // 메인허브가 포함돼 새로고침 필요
 
   useEffect(() => {
     let timer, stopped = false, tries = 0

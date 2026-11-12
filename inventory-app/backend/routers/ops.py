@@ -26,7 +26,8 @@ BUILD_TIMEOUT = 600
 BUILD_STEPS = [("modules transformed", 70), ("rendering chunks", 80), ("computing gzip", 90)]
 # 처음 예상 시간(초). 성공하면 실제 걸린 시간으로 갱신
 # shortcut: 메모리 저장이라 재시작하면 기본값으로, 진행률이 많이 어긋나면 파일에 저장
-_estimate = {"build": 60, "restart": 8}
+_estimate = {"build": 60, "restart": 8, "build_all": 180}
+ALL_FOLDERS = (("메인허브·재고·업무일지", "inventory-app"), ("Sales", "sales-app"), ("CRM", "crm-app"))  # [전체 빌드] 순서
 
 BOOT = time.time()  # 화면이 '재시작 후 다시 올라왔는지' 판단용
 _lock = threading.Lock()
@@ -42,7 +43,7 @@ def _view(job):
         return None
     if job["status"] == "running":
         elapsed = time.time() - job["started"]
-        percent = min(95, max(job["step_pct"], int(elapsed / _estimate[job["action"]] * 95)))
+        percent = min(95, max(job["step_pct"], int(elapsed / _estimate[job["est"]] * 95)))
     else:
         percent = 100 if job["status"] == "done" else job["step_pct"]
     return {k: job[k] for k in ("app", "action", "status", "error", "by")} | {"percent": percent, "log": job["log"][-12:]}
@@ -52,26 +53,47 @@ def _finish(job, error=None):
     job["status"] = "error" if error else "done"
     job["error"] = error
     if not error:
-        _estimate[job["action"]] = max(3, time.time() - job["started"])
+        _estimate[job["est"]] = max(3, time.time() - job["started"])
     logger.warning("관리 작업 %s: %s %s (by %s)%s", job["status"], job["app"], job["action"], job["by"], f" — {error}" if error else "")
+
+
+def _build_folder(job, folder, lo=0, hi=100):
+    """한 앱 빌드. 진행률은 lo~hi 구간에 맞춰 올림. 종료 코드 반환"""
+    proc = subprocess.Popen(BUILD_CMD, cwd=f"{HOME}/{folder}/frontend", stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            text=True, env={**os.environ, "NO_COLOR": "1", "CI": "1"})
+    killer = threading.Timer(BUILD_TIMEOUT, proc.kill)
+    killer.start()
+    for line in proc.stdout:
+        line = re.sub(r"\x1b\[[0-9;]*m", "", line).rstrip()
+        if line:
+            job["log"] = (job["log"] + [line])[-40:]
+        for key, pct in BUILD_STEPS:
+            if key in line:
+                job["step_pct"] = max(job["step_pct"], lo + pct * (hi - lo) // 100)
+    rc = proc.wait()
+    killer.cancel()
+    return rc
 
 
 def _run_build(job, folder):
     try:
-        proc = subprocess.Popen(BUILD_CMD, cwd=f"{HOME}/{folder}/frontend", stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                text=True, env={**os.environ, "NO_COLOR": "1", "CI": "1"})
-        killer = threading.Timer(BUILD_TIMEOUT, proc.kill)
-        killer.start()
-        for line in proc.stdout:
-            line = re.sub(r"\x1b\[[0-9;]*m", "", line).rstrip()
-            if line:
-                job["log"] = (job["log"] + [line])[-40:]
-            for key, pct in BUILD_STEPS:
-                if key in line:
-                    job["step_pct"] = max(job["step_pct"], pct)
-        rc = proc.wait()
-        killer.cancel()
+        rc = _build_folder(job, folder)
         _finish(job, None if rc == 0 else f"빌드 실패 (종료 코드 {rc})")
+    except Exception as e:
+        _finish(job, f"빌드 실행 오류: {e}")
+
+
+def _run_build_all(job, _folder=None):
+    """세 앱을 차례로. 하나라도 실패하면 거기서 멈춤 (앞에서 성공한 앱은 이미 반영됨)"""
+    try:
+        n = len(ALL_FOLDERS)
+        for i, (name, folder) in enumerate(ALL_FOLDERS):
+            job["log"] = (job["log"] + [f"── {name} 빌드 ({i + 1}/{n}) ──"])[-40:]
+            rc = _build_folder(job, folder, 100 * i // n, 100 * (i + 1) // n)
+            if rc != 0:
+                return _finish(job, f"{name} 빌드 실패 (종료 코드 {rc})" + (" — 앞의 앱은 반영됨" if i else ""))
+            job["step_pct"] = max(job["step_pct"], 100 * (i + 1) // n)
+        _finish(job)
     except Exception as e:
         _finish(job, f"빌드 실행 오류: {e}")
 
@@ -105,14 +127,16 @@ def ops_status(request: Request):
 def ops_run(app: str, action: str, request: Request):
     global _job
     user = _admin(request)
-    if app not in APPS or action not in ("build", "restart"):
+    build_all = app == "all" and action == "build"
+    if not build_all and (app not in APPS or action not in ("build", "restart")):
         raise HTTPException(status_code=404, detail="알 수 없는 작업입니다")
-    folder, service = APPS[app]
+    folder, service = APPS.get(app, (None, None))
     with _lock:
         if _job and _job["status"] == "running":
             raise HTTPException(status_code=409, detail="다른 작업이 진행 중입니다. 끝난 뒤 다시 시도하세요")
         _job = {"app": app, "action": action, "status": "running", "error": None, "by": user.get("name"),
-                "started": time.time(), "step_pct": 0, "log": []}
+                "started": time.time(), "step_pct": 0, "log": [],
+                "est": "build_all" if build_all else action}
         job = _job
     logger.warning("관리 작업 시작: %s %s (by %s)", app, action, job["by"])
 
@@ -121,6 +145,6 @@ def ops_run(app: str, action: str, request: Request):
         subprocess.Popen(["sudo", "systemctl", "restart", "--no-block", service], start_new_session=True)
         return {"job": _view(job), "self_restart": True, "now": now}
 
-    target = _run_build if action == "build" else _run_restart
+    target = _run_build_all if build_all else _run_build if action == "build" else _run_restart
     threading.Thread(target=target, args=(job, folder if action == "build" else service), daemon=True).start()
     return {"job": _view(job), "self_restart": False}
