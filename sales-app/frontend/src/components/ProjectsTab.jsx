@@ -105,6 +105,9 @@ export default function ProjectsTab({ year, isActive, hideDone }) {
         getProjectStats({ year })
       ])
       setProjects(projectsRes.data)
+      // 활동 로그 '화면 열기': ?project=ID 면 수정 창 (한 번만)
+      const target = projectsRes.data.find(p => p.id === Number(new URLSearchParams(window.location.search).get('project')))
+      if (target) { window.history.replaceState(null, '', window.location.pathname); setSelectedProject(target); setShowModal(true) }
       setStats(statsRes.data)
     } catch (error) {
       console.error('데이터 로딩 실패:', error)

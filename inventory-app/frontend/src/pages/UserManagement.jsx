@@ -52,6 +52,8 @@ export default function UserManagement() {
     try {
       const res = await getUsers()
       setUsers(res.data.users)
+      const target = res.data.users.find(u => u.id === Number(new URLSearchParams(window.location.search).get('user'))) // 활동 로그 '화면 열기'
+      if (target) { window.history.replaceState(null, '', window.location.pathname); openEditModal(target) }
     } catch (e) {
       console.error('Failed to load users:', e)
     } finally {

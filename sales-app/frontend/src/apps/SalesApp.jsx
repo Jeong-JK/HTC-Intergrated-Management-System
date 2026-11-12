@@ -16,8 +16,9 @@ const SHEET_NAMES = {
 }
 
 export default function SalesApp() {
-  const [activeTab, setActiveTab] = useState('projects') // 'purchases', 'projects', 'weekly'
-  const [year, setYear] = useState(CURRENT_YEAR)
+  // 활동 로그 '화면 열기': ?tab=&year= 로 바로 그 탭/연도
+  const [activeTab, setActiveTab] = useState(() => ['purchases', 'projects', 'weekly'].includes(new URLSearchParams(window.location.search).get('tab')) ? new URLSearchParams(window.location.search).get('tab') : 'projects')
+  const [year, setYear] = useState(() => Number(new URLSearchParams(window.location.search).get('year')) || CURRENT_YEAR)
   const [accessChecked, setAccessChecked] = useState(false)
   const [sheetViewMode, setSheetViewMode] = useState(false)  // 시트 뷰 모드
   const [syncing, setSyncing] = useState(false)

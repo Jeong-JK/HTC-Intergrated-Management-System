@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, History } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
-import { Table, Btn, inputCls } from '../components/Common.jsx'
-import { getActivityLogs } from '../api.js'
+import { Table, Btn, Modal, inputCls } from '../components/Common.jsx'
+import { getActivityLogs, getActivityRecord } from '../api.js'
 
 const SYSTEMS = [['', '전체 시스템'], ['hub', '메인허브'], ['inventory', '재고'], ['worklog', '업무일지'], ['sales', 'Sales'], ['crm', 'CRM']]
 const fmt = (s) => (s ? s.replace('T', ' ').slice(0, 16) : '-')
@@ -27,6 +27,7 @@ export default function ActivityLogPage() {
   const [users, setUsers] = useState([])
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [openId, setOpenId] = useState(null) // 상세 창으로 연 기록
 
   const load = async (offset = 0) => {
     setLoading(true)
@@ -62,7 +63,7 @@ export default function ActivityLogPage() {
           </div>
           <div>
             <h1 className="text-lg font-bold text-slate-800">활동 로그</h1>
-            <p className="text-xs text-slate-500">추가·수정·삭제와 로그인 기록 (6개월 보관) · 줄을 누르면 새 탭에서 해당 화면이 열립니다</p>
+            <p className="text-xs text-slate-500">추가·수정·삭제와 로그인 기록 (6개월 보관) · 줄을 누르면 자세히 볼 수 있습니다</p>
           </div>
         </div>
       </div>
@@ -101,9 +102,8 @@ export default function ActivityLogPage() {
 
           <Table headers={['시간', '사용자', '시스템', '메뉴', '동작', '내용', 'IP']} cards>
             {rows.map(r => (
-              <tr key={r.id} onClick={() => r.link && window.open(r.link, '_blank', 'noopener')}
-                title={r.link ? '새 탭에서 열기' : undefined}
-                className={`border-b border-border last:border-0 ${r.link ? 'cursor-pointer hover:bg-amber-50' : ''}`}>
+              <tr key={r.id} onClick={() => r.method !== 'LOGIN' && setOpenId(r.id)}
+                className={`border-b border-border last:border-0 ${r.method !== 'LOGIN' ? 'cursor-pointer hover:bg-amber-50' : ''}`}>
                 <td className="px-4 py-2.5 whitespace-nowrap text-slate-600">{fmt(r.created_at)}</td>
                 <td className="px-4 py-2.5 whitespace-nowrap font-medium text-slate-800">{r.user_name}</td>
                 <td className="px-4 py-2.5 whitespace-nowrap">{r.system_name}</td>
@@ -124,6 +124,53 @@ export default function ActivityLogPage() {
           )}
         </section>
       </div>
+      {openId && <RecordModal id={openId} onClose={() => setOpenId(null)} />}
     </div>
+  )
+}
+
+// 상세 창: 이번 변경 + 그 항목의 현재 정보, [화면 열기]는 새 탭에서 그 항목으로 바로
+function RecordModal({ id, onClose }) {
+  const [data, setData] = useState(null)
+  useEffect(() => {
+    getActivityRecord(id).then(r => setData(r.data))
+      .catch(e => { alert(e.response?.data?.detail || '불러오지 못했습니다'); onClose() })
+  }, [id])
+  const log = data?.log
+
+  return (
+    <Modal title={log ? `${log.system_name} · ${log.menu} ${log.action}` : '불러오는 중...'}
+      sub={log ? `${fmt(log.created_at)} · ${log.user_name}${log.ip ? ` · ${log.ip}` : ''}` : undefined}
+      onClose={onClose} size="lg"
+      footer={<>
+        <Btn onClick={onClose}>닫기</Btn>
+        {data?.link && <Btn variant="primary" onClick={() => window.open(data.link, '_blank', 'noopener')}>화면 열기 (새 탭)</Btn>}
+      </>}>
+      {data && (
+        <div className="space-y-4">
+          <div>
+            <div className="text-xs font-semibold text-slate-500 mb-1">이번 기록</div>
+            <div className="text-sm text-slate-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 break-all">{log.detail || `${log.menu} ${log.action}`}</div>
+          </div>
+          <div>
+            <div className="text-xs font-semibold text-slate-500 mb-1">현재 정보{data.name ? ` — ${data.name}` : ''}</div>
+            {data.deleted ? (
+              <div className="text-sm text-slate-400 px-3 py-4 text-center border border-dashed border-slate-200 rounded-lg">삭제된 항목이라 현재 정보가 없습니다</div>
+            ) : data.fields.length ? (
+              <dl className="border border-slate-200 rounded-lg divide-y divide-slate-100 text-sm overflow-hidden">
+                {data.fields.map(f => (
+                  <div key={f.label} className="grid grid-cols-[7rem_1fr]">
+                    <dt className="px-3 py-2 bg-slate-50 text-slate-500">{f.label}</dt>
+                    <dd className="px-3 py-2 text-slate-800 break-all whitespace-pre-wrap">{f.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            ) : (
+              <div className="text-sm text-slate-400 px-3 py-4 text-center border border-dashed border-slate-200 rounded-lg">이 메뉴는 상세 정보를 따로 보관하지 않습니다 — [화면 열기]로 확인하세요</div>
+            )}
+          </div>
+        </div>
+      )}
+    </Modal>
   )
 }

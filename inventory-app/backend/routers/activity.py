@@ -2,20 +2,25 @@
 상세('무엇을 무엇으로')는 audit.py
 재고 서버가 보관하고, Sales/CRM 은 /api/activity/record 로 보냄 (서버끼리만 아는 키 확인)"""
 import hmac
+from contextlib import contextmanager
 import secrets
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlencode
+import pymysql
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
-from database import db_cursor
+from database import db_cursor, sales_db_cursor
+from config import PIPELINE_DB_HOST, PIPELINE_DB_USER, PIPELINE_DB_PASSWORD, PIPELINE_DB_NAME
+import audit
 from routers.auth import get_session, require_perm, rank_order
 
 router = APIRouter(tags=["activity"])
 
 KEEP_DAYS = 183  # 6개월
 PAGE_SIZE = 100
-HIDDEN_LOGIN_ID = "admin"  # 관리자 계정 기록은 관리자에게만 보임 (업무일지와 같은 규칙)
+HIDDEN_LOGIN_ID = "admin"  # 관리자(admin) 계정은 기록하지 않음
 WRITE_METHODS = ("POST", "PUT", "PATCH", "DELETE")
 # 기록 안 함: 로그인(따로 기록), 읽음 표시, 시트 웹훅, 활동 로그 자체
 SKIP_PREFIXES = ("/api/auth/login", "/api/activity", "/api/sheets/webhook")
@@ -71,19 +76,22 @@ def describe(method, path):
     return menu, action
 
 
-def record(user, system, method, path, ip, detail=None):
+def record(user, system, method, path, ip, detail=None, ref_table=None, ref_id=None):
+    if user.get("user_id") == HIDDEN_LOGIN_ID:
+        return
     with db_cursor() as cur:
         cur.execute(
-            "INSERT INTO activity_logs (user_id, user_name, sys_key, method, path, ip, detail) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-            (user["id"], user.get("name"), system, method, path[:255], (ip or "")[:45], detail and detail[:500])
+            """INSERT INTO activity_logs (user_id, user_name, sys_key, method, path, ip, detail, ref_table, ref_id)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+            (user["id"], user.get("name"), system, method, path[:255], (ip or "")[:45], detail and detail[:500], ref_table, ref_id)
         )
 
 
-def record_session(session_token, system, method, path, ip, detail=None):
+def record_session(session_token, system, method, path, ip, detail=None, ref_table=None, ref_id=None):
     """세션 주인 이름으로 기록 (로그인 안 된 요청은 무시)"""
     user = get_session(session_token) if session_token else None
     if user:
-        record(user, system, method, path, ip, detail)
+        record(user, system, method, path, ip, detail, ref_table, ref_id)
 
 
 # 목록에서 누르면 새 탭으로 여는 화면
@@ -108,8 +116,10 @@ def link(system, method, path):
 
 
 def record_login(cur, user, ip, master=False):
-    """로그인: 마지막 로그인 시각 + 기록, 오래된 기록 정리"""
+    """로그인: 마지막 로그인 시각 + 기록(admin 계정 제외), 오래된 기록 정리"""
     cur.execute("UPDATE users SET last_login_at = NOW() WHERE id = %s", (user["id"],))
+    if user["user_id"] == HIDDEN_LOGIN_ID:
+        return
     cur.execute(
         "INSERT INTO activity_logs (user_id, user_name, sys_key, method, path, ip) VALUES (%s, %s, 'hub', 'LOGIN', %s, %s)",
         (user["id"], user["name"], "/api/auth/login" + ("/master" if master else ""), (ip or "")[:45])
@@ -125,6 +135,8 @@ class RecordIn(BaseModel):
     status: int = 200
     ip: Optional[str] = None
     detail: Optional[str] = None
+    ref_table: Optional[str] = None
+    ref_id: Optional[int] = None
 
 
 @router.post("/activity/record")
@@ -135,7 +147,7 @@ def record_from_service(data: RecordIn, request: Request):
     if data.system not in ("sales", "crm"):
         raise HTTPException(status_code=400, detail="알 수 없는 시스템입니다")
     if should_log(data.method, data.path, data.status):
-        record_session(data.session_token, data.system, data.method, data.path, data.ip, data.detail)
+        record_session(data.session_token, data.system, data.method, data.path, data.ip, data.detail, data.ref_table, data.ref_id)
     return {"ok": True}
 
 
@@ -176,3 +188,85 @@ def list_activity_logs(request: Request, user_id: Optional[int] = None, system: 
         r["menu"], r["action"] = describe(r["method"], r["path"])
         r["link"] = link(r["system"], r["method"], r["path"])
     return {"data": rows[:PAGE_SIZE], "has_more": len(rows) > PAGE_SIZE, "users": users}
+
+
+# ── 상세 창: 기록된 항목의 현재 정보 + 그 항목을 바로 여는 주소
+@contextmanager
+def pipeline_db_cursor():
+    """Sales(htc_pipeline) DB — 읽기만"""
+    conn = pymysql.connect(host=PIPELINE_DB_HOST, user=PIPELINE_DB_USER, password=PIPELINE_DB_PASSWORD,
+                           database=PIPELINE_DB_NAME, charset="utf8mb4", cursorclass=pymysql.cursors.DictCursor)
+    try:
+        with conn.cursor() as cur:
+            yield cur
+    finally:
+        conn.close()
+
+
+AUDIT_APP = {"sales": ("sales", pipeline_db_cursor), "crm": ("crm", sales_db_cursor)}  # 그 외(메인허브/재고/업무일지)는 재고 DB
+
+
+def _crm_ids(cur, contact_id):
+    cur.execute("SELECT c.id AS contact, t.id AS team, t.company_id AS company FROM contacts c JOIN teams t ON c.team_id = t.id WHERE c.id = %s", (contact_id,))
+    return cur.fetchone() or {}
+
+
+def deep_link(cur, system, method, path, table, row):
+    """새 탭에서 그 항목이 바로 열리는 주소 (각 앱 화면이 주소의 값을 읽어 이동)"""
+    base = link(system, method, path)
+    if not row or not base:
+        return base
+    q = {}
+    if table == "items":
+        q = {"name": row["item_name"], "q": row["serial"] or ""}
+    elif table in ("rental_history", "delivery_history"):
+        q = {"q": row["item_name"]}
+    elif table == "inbound":
+        q = {"q": row["serial"] or row["item_name"], "year": row["inbound_date"].year if row["inbound_date"] else ""}
+    elif table == "users":
+        q = {"user": row["id"]}
+    elif table == "posts" and system == "hub":
+        q = {"post": row["id"]}
+    elif table == "projects":
+        q = {"tab": "projects", "year": row["year"], "project": row["id"]}
+    elif table == "weekly_schedule":
+        q = {"tab": "weekly", "year": row["year"]}
+    elif table == "companies":
+        q = {"company": row["id"]}
+    elif table == "teams":
+        q = {"company": row["company_id"], "team": row["id"]}
+    elif table in ("contacts", "meetings"):
+        q = _crm_ids(cur, row["id"] if table == "contacts" else row["contact_id"])
+    elif table == "quotations":
+        q = {"quotation": row["id"]}
+    q = {k: v for k, v in q.items() if v not in (None, "")}
+    return base + ("?" + urlencode(q) if q else "")
+
+
+@router.get("/activity-logs/{log_id}/record")
+def get_activity_record(log_id: int, request: Request):
+    """상세 창: 기록 + 그 항목의 현재 정보(칸 이름/값) + 바로가기 주소. 삭제된 항목은 deleted"""
+    viewer = require_perm(request, "can_view_activity_log")
+    with db_cursor() as cur:
+        cur.execute("SELECT id, user_id, user_name, sys_key AS system, method, path, ip, detail, ref_table, ref_id, created_at "
+                    "FROM activity_logs WHERE id = %s", (log_id,))
+        log = cur.fetchone()
+    if not log:
+        raise HTTPException(status_code=404, detail="기록을 찾을 수 없습니다")
+    log["system_name"] = SYSTEM_NAMES.get(log["system"], log["system"])
+    log["menu"], log["action"] = describe(log["method"], log["path"])
+    app, cursor_factory = AUDIT_APP.get(log["system"], ("inventory", db_cursor))
+    spec = audit.spec_for(app, log["ref_table"]) if log["ref_id"] else None
+    result = {"log": log, "name": None, "fields": [], "deleted": False, "link": link(log["system"], log["method"], log["path"])}
+    if not spec:
+        return result
+    with cursor_factory() as cur:
+        cur.execute(f"SELECT * FROM {spec['table']} WHERE id = %s", (log["ref_id"],))
+        row = cur.fetchone()
+        if not row:
+            result["deleted"] = True
+            return result
+        result["name"] = audit.display_name(cur, spec, row)
+        result["fields"] = [{"label": label, "value": audit.short(row.get(col), 300)} for col, label in spec["fields"].items() if col in row]
+        result["link"] = deep_link(cur, log["system"], log["method"], log["path"], spec["table"], row)
+    return result

@@ -14,6 +14,8 @@ export default function InboundDetail() {
   const [loading, setLoading] = useState(false)
   const [search, setSearch]   = usePersistedState('inbound_detail_search', '')
   const [year, setYear]       = usePersistedState('inbound_detail_year', dayjs().year())
+  // 활동 로그 '화면 열기': ?q=시리얼&year=입고 연도
+  useEffect(() => { const p = new URLSearchParams(window.location.search); if (p.get('q')) { setSearch(p.get('q')); if (p.get('year')) setYear(Number(p.get('year'))) } }, [])
   const [editModal, setEditModal] = useState(null)
   const [editForm, setEditForm] = useState({})
   const [saving, setSaving] = useState(false)

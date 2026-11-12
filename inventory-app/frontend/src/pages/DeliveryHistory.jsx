@@ -19,6 +19,8 @@ export default function DeliveryHistory() {
   const [showPending, setShowPending] = usePersistedState('delivery_show_pending_v2', true)
   const [showCompleted, setShowCompleted] = usePersistedState('delivery_show_completed_v2', false)
   const [selectedIds, setSelectedIds] = useState(new Set())
+  // 활동 로그 '화면 열기': ?q=검색어 (반납/완료 건도 보이게)
+  useEffect(() => { const q = new URLSearchParams(window.location.search).get('q'); if (q) { setSearch(q); setShowPending(true); setShowCompleted(true) } }, [])
   const [confirmModal, setConfirmModal] = useState(false)
   const [confirmDate, setConfirmDate] = useState('')  // 납품처리 시 날짜
   const [showReceipt, setShowReceipt] = useState(false)

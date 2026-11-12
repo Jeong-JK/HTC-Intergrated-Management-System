@@ -64,9 +64,9 @@ async def activity_logger(request: Request, call_next):
     if activity.should_log(request.method, path, response.status_code):
         ip = request.headers.get("x-real-ip") or (request.client.host if request.client else None)
         try:
-            detail = await run_in_threadpool(audit.after, db_cursor, snap) if snap else None
+            detail, ref_table, ref_id = await run_in_threadpool(audit.after, db_cursor, snap) if snap else (None, None, None)
             await run_in_threadpool(activity.record_session, request.cookies.get("session_token"),
-                                    activity.inventory_system(path), request.method, path, ip, detail)
+                                    activity.inventory_system(path), request.method, path, ip, detail, ref_table, ref_id)
         except Exception as e:
             print(f"활동 로그 기록 실패: {e}")
     return response

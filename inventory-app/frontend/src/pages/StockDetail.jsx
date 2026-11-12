@@ -116,6 +116,9 @@ export default function StockDetail() {
 
   useEffect(() => {
     loadItemNames()
+    // 활동 로그 '화면 열기': ?name=품명&q=시리얼
+    const p = new URLSearchParams(window.location.search)
+    if (p.get('name')) { setSelectedName(p.get('name')); setSearch(p.get('q') || '') }
   }, [])
 
   const loadItemNames = async () => {

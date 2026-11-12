@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Home, Users, Search, Plus, Edit, Calendar, TrendingUp, Trash2, Download, X } from 'lucide-react'
 import * as api from '../../api'
 import * as gdrive from '../../utils/googleDrive'
@@ -218,6 +218,22 @@ export default function MainView({ navigate }) {
       console.error('담당자 이동 실패:', err)
     }
   }
+
+  // 활동 로그 '화면 열기': 업체 목록을 받은 뒤 주소의 업체/팀/담당자/견적으로 한 번 이동
+  const deepLinked = useRef(false)
+  useEffect(() => {
+    if (deepLinked.current || !companies.length) return
+    deepLinked.current = true
+    const p = new URLSearchParams(window.location.search)
+    const n = (k) => Number(p.get(k)) || null
+    if (![...p.keys()].length) return
+    window.history.replaceState(null, '', window.location.pathname)
+    if (n('quotation')) { setEditingQuotationId(n('quotation')); setShowQuotationModal(true) }
+    const company = companies.find(c => c.id === n('company'))
+    if (n('contact')) navigateToContact(n('company'), n('team'), n('contact'))
+    else if (company && n('team')) onCompanySelect(company).then(() => onTeamSelect({ id: n('team') }))
+    else if (company) onCompanySelect(company)
+  }, [companies])
 
   const handleEditContact = () => {
     if (!selectedContact) return

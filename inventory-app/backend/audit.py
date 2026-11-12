@@ -71,7 +71,7 @@ SPECS = {
 }
 
 
-def short(v):
+def short(v, limit=VALUE_MAX):
     if v is None or v == "":
         return "(빈칸)"
     if isinstance(v, bool):
@@ -83,10 +83,10 @@ def short(v):
     if isinstance(v, (date, datetime)):
         return str(v)[:16]
     s = " ".join(str(v).split())  # 줄바꿈 정리
-    return s if len(s) <= VALUE_MAX else s[:VALUE_MAX] + "…"
+    return s if len(s) <= limit else s[:limit] + "…"
 
 
-def _name(cur, spec, row):
+def display_name(cur, spec, row):
     if spec.get("name_sql"):
         cur.execute(spec["name_sql"], row)
         found = cur.fetchone()
@@ -117,25 +117,35 @@ def before(cursor_factory, app, method, path):
             return {"spec": spec, "max": cur.fetchone()["m"]}
         cur.execute(f"SELECT * FROM {spec['table']} WHERE id = %s", (rid,))
         row = cur.fetchone()
-        return row and {"spec": spec, "id": rid, "row": row, "name": _name(cur, spec, row)}
+        return row and {"spec": spec, "id": rid, "row": row, "name": display_name(cur, spec, row)}
+
+
+def spec_for(app, table):
+    """기록된 표 이름 → 설명서 (목록에 있는 표만 조회 허용)"""
+    return next((s for s in SPECS.get(app, []) if s["table"] == table), None)
 
 
 def after(cursor_factory, snap):
-    """요청이 성공한 뒤: 한 줄 요약 (추가/삭제는 이름, 수정은 '이름 · 칸: 전 → 후')"""
+    """요청이 성공한 뒤: (한 줄 요약, 표, 행 id). 요약은 추가/삭제는 이름, 수정은 '이름 · 칸: 전 → 후'"""
     if not snap:
-        return None
+        return None, None, None
+    text, ref_id = _after(cursor_factory, snap)
+    return text, snap["spec"]["table"], ref_id
+
+
+def _after(cursor_factory, snap):
     spec = snap["spec"]
     with cursor_factory() as cur:
         if "max" in snap:
             cur.execute(f"SELECT * FROM {spec['table']} WHERE id > %s ORDER BY id LIMIT %s", (snap["max"], CREATE_LIMIT + 1))
             rows = cur.fetchall()
-            names = [_name(cur, spec, r) for r in rows[:CREATE_LIMIT]]
+            names = [display_name(cur, spec, r) for r in rows[:CREATE_LIMIT]]
             text = ", ".join(names) + (" 외" if len(rows) > CREATE_LIMIT else "")
-            return text[:DETAIL_MAX] or None
+            return text[:DETAIL_MAX] or None, rows[0]["id"] if rows else None
         cur.execute(f"SELECT * FROM {spec['table']} WHERE id = %s", (snap["id"],))
         new = cur.fetchone()
     if new is None:
-        return snap["name"][:DETAIL_MAX]
+        return snap["name"][:DETAIL_MAX], snap["id"]
     old = snap["row"]
     changes = [f"{label}: {short(old[col])} → {short(new[col])}"
                for col, label in spec["fields"].items() if col in old and old[col] != new[col]]
@@ -145,4 +155,4 @@ def after(cursor_factory, snap):
         if any(old[c] != new[c] for c in old if c.startswith("can_")):
             changes.append("권한 변경")
     text = snap["name"] + (" · " + ", ".join(changes) if changes else "")
-    return text[:DETAIL_MAX]
+    return text[:DETAIL_MAX], snap["id"]

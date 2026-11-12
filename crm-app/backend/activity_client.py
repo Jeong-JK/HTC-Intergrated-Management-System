@@ -28,10 +28,10 @@ async def take_snapshot(request, app, cursor_factory):
 async def report_activity(request, system, status, snap=None, cursor_factory=None):
     if request.method not in WRITE_METHODS or status >= 400 or not request.url.path.startswith("/api/"):
         return
-    detail = None
+    detail = ref_table = ref_id = None
     if snap:
         try:
-            detail = await run_in_threadpool(audit.after, cursor_factory, snap)
+            detail, ref_table, ref_id = await run_in_threadpool(audit.after, cursor_factory, snap)
         except Exception as e:
             logger.warning(f"활동 로그 상세 실패: {e}")
     try:
@@ -40,7 +40,7 @@ async def report_activity(request, system, status, snap=None, cursor_factory=Non
                 "http://localhost:8000/api/activity/record", timeout=1.5,
                 headers={"X-Activity-Token": TOKEN_FILE.read_text().strip()},
                 json={"session_token": request.cookies.get("session_token"), "system": system,
-                      "method": request.method, "path": request.url.path, "status": status, "detail": detail,
+                      "method": request.method, "path": request.url.path, "status": status, "detail": detail, "ref_table": ref_table, "ref_id": ref_id,
                       "ip": request.headers.get("x-real-ip") or (request.client.host if request.client else None)},
             )
     except Exception as e:

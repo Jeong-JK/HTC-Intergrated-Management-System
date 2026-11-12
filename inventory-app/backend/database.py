@@ -274,7 +274,9 @@ ALTER TABLE users
 
 -- 활동 로그 상세: '홍길동 (현대로템) · 전화번호: 010-1 → 010-2' 처럼 한 줄
 ALTER TABLE activity_logs
-    ADD COLUMN IF NOT EXISTS detail TEXT DEFAULT NULL;
+    ADD COLUMN IF NOT EXISTS detail TEXT DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS ref_table VARCHAR(40) DEFAULT NULL,  -- 상세 창에서 현재 정보를 찾을 표/행
+    ADD COLUMN IF NOT EXISTS ref_id BIGINT DEFAULT NULL;
 """
 
 def init_db():

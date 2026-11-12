@@ -103,6 +103,8 @@ export default function BoardPage() {
       setLoading(true)
       const res = await getPosts()
       setPosts(res.data.data || [])
+      const target = (res.data.data || []).find(p => p.id === Number(new URLSearchParams(window.location.search).get('post'))) // 활동 로그 '화면 열기'
+      if (target) { window.history.replaceState(null, '', window.location.pathname); handleViewPost(target) }
     } catch (error) {
       console.error('게시글 로딩 실패:', error)
       alert('게시글을 불러오는데 실패했습니다')

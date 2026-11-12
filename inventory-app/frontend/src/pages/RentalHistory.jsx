@@ -16,6 +16,8 @@ export default function RentalHistory() {
   const [showReturned, setShowReturned] = usePersistedState('rental_history_show_returned_v2', false)
   const [showNeedsCheckOnly, setShowNeedsCheckOnly] = usePersistedState('rental_history_show_needs_check', false)
   const [selectedIds, setSelectedIds] = useState(new Set())
+  // 활동 로그 '화면 열기': ?q=검색어 (반납/완료 건도 보이게)
+  useEffect(() => { const q = new URLSearchParams(window.location.search).get('q'); if (q) { setSearch(q); setShowRenting(true); setShowReturned(true) } }, [])
   const [returnModal, setReturnModal] = useState(false)
   const [returnDate, setReturnDate] = useState(dayjs().format('YYYY-MM-DD'))
   const [returnNote, setReturnNote] = useState('')
