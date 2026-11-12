@@ -176,6 +176,8 @@ def list_activity_logs(request: Request, user_id: Optional[int] = None, system: 
     if hide_admin:
         sql += " AND user_id NOT IN (SELECT id FROM users WHERE user_id = %s)"
         params.append(HIDDEN_LOGIN_ID)
+    if not see_all:  # 내 활동: 로그인·로그아웃은 빼고 추가/수정/삭제만
+        sql += " AND method <> 'LOGIN' AND path <> '/api/auth/logout'"
     if user_id:
         sql += " AND user_id = %s"
         params.append(user_id)
