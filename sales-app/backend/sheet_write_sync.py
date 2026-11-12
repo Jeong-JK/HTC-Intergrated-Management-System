@@ -8,10 +8,11 @@ DB → Google Sheets 동기화 모듈
 import gspread
 import re
 from google_sheets_sync import get_spreadsheet
+from config import CURRENT_YEAR, PROJECT_NO_PATTERN
 
 # 시트 이름
-SHEET_PURCHASES = '2026Y 매입'
-SHEET_PROJECTS = '2026Y 프로젝트'
+SHEET_PURCHASES = f'{CURRENT_YEAR}Y 매입'
+SHEET_PROJECTS = f'{CURRENT_YEAR}Y 프로젝트'
 
 
 def find_purchase_row(sheet, po_number, product_name):
@@ -164,8 +165,8 @@ def find_project_row(sheet, project_no):
 
             no_cell = row[no_col].strip() if no_col < len(row) else ''
 
-            # 26-XX 형식의 프로젝트 번호 추출
-            match = re.match(r'(26-\d+)', no_cell.split('\n')[0])
+            # 올해 형식(26-XX)의 프로젝트 번호 추출
+            match = re.match(PROJECT_NO_PATTERN, no_cell.split('\n')[0])
             if match and match.group(1) == project_no:
                 return i + 1, col_map
 

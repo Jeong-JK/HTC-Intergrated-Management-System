@@ -129,7 +129,7 @@ export default function ProjectsTab({ year, isActive, hideDone }) {
 
   const handleAddProject = () => {
     // 신규 프로젝트용 빈 객체 (year만 설정)
-    setSelectedProject({ year: year || 2026 })
+    setSelectedProject({ year: year || new Date().getFullYear() })
     setShowModal(true)
   }
 

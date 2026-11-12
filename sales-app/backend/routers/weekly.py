@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from database import db_cursor
 from config import CURRENT_YEAR
 import json
+import re
 
 router = APIRouter(tags=["Weekly"])
 
@@ -75,7 +76,7 @@ def get_project_items(project_no: str):
         }
 
 @router.get("/weekly")
-def get_weekly_schedules(year: int = CURRENT_YEAR, limit: int = 200, offset: int = 0):
+def get_weekly_schedules(year: int = CURRENT_YEAR, limit: int = 5000, offset: int = 0):
     """Weekly 일정 목록 조회 - weekly_schedule 테이블에서 조회"""
     with db_cursor() as cur:
         # weekly_schedule 테이블에서 가져오기 (프로젝트 상태 포함)
@@ -132,16 +133,10 @@ def get_weekly_schedules(year: int = CURRENT_YEAR, limit: int = 200, offset: int
                 'purchase_item_id': None
             })
 
-        # 정렬: project_no (26-01, 26-02, ...) 순서
+        # 정렬: project_no (26-01, 26-02, …, 27-01) 순서, 형식이 다르면 맨 뒤
         def sort_key(x):
-            pno = x['project_no'] or 'zzz'
-            # 26-01 형식에서 숫자 추출
-            if pno.startswith('26-'):
-                try:
-                    return (0, int(pno.split('-')[1]), x['id'])
-                except:
-                    pass
-            return (1, 0, x['id'])
+            m = re.match(r'(\d{2})-(\d+)', x['project_no'] or '')
+            return (0, int(m.group(1)), int(m.group(2)), x['id']) if m else (1, 0, 0, x['id'])
         results.sort(key=sort_key)
 
         return results[:limit]
@@ -164,8 +159,9 @@ def get_weekly_schedule(schedule_id: int):
         return schedule
 
 @router.post("/weekly")
-def create_weekly_schedule(schedule: WeeklyScheduleCreate):
+def create_weekly_schedule(schedule: WeeklyScheduleCreate, request: Request):
     """Weekly 일정 생성"""
+    require_perm(request, "can_edit_weekly")
     with db_cursor() as cur:
         week_data_json = json.dumps(schedule.week_data) if schedule.week_data else None
 

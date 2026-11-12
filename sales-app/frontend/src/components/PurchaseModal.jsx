@@ -24,7 +24,7 @@ export default function PurchaseModal({ purchase, onSave, onClose }) {
   useEffect(() => {
     const loadProjects = async () => {
       try {
-        const res = await getProjects({ year: purchase?.year || 2026 })
+        const res = await getProjects({ year: purchase?.year || new Date().getFullYear() })
         // "고객사_프로젝트명" 형식으로 옵션 생성
         const options = res.data.map(p => `${p.customer}_${p.project_name}`)
         setProjectOptions(['프로젝트 미정', ...options])
@@ -238,7 +238,7 @@ export default function PurchaseModal({ purchase, onSave, onClose }) {
       // 각 품목 처리 (송금 정보는 테이블에서 더블클릭으로 수정하므로 여기서는 제외)
       for (const item of validItems) {
         const itemData = {
-          year: purchase?.year || 2026,
+          year: purchase?.year || new Date().getFullYear(),
           po_number: commonData.po_number?.trim() || null,
           quote: commonData.quote?.trim() || null,
           oc: commonData.oc?.trim() || null,

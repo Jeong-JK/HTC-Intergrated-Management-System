@@ -8,12 +8,8 @@ import axios from 'axios'
 
 const CURRENT_YEAR = new Date().getFullYear()
 
-// 시트 이름 매핑
-const SHEET_NAMES = {
-  purchases: '2026Y 매입',
-  projects: '2026Y 프로젝트',
-  weekly: '2026Y Weekly'
-}
+// 시트 이름 (연도별: 2026Y 매입 …)
+const SHEET_LABELS = { purchases: '매입', projects: '프로젝트', weekly: 'Weekly' }
 
 export default function SalesApp() {
   // 활동 로그 '화면 열기': ?tab=&year= 로 바로 그 탭/연도
@@ -24,6 +20,7 @@ export default function SalesApp() {
   const [syncing, setSyncing] = useState(false)
   const [syncStatus, setSyncStatus] = useState(null)
   const [hideDone, setHideDone] = useState(false)  // 완료 프로젝트 화면에서만 숨김 (통계/금액은 서버 값 그대로)
+  const [me, setMe] = useState(null) // 동기화 버튼은 관리자만
 
   const goToMainHub = () => {
     const protocol = window.location.protocol
@@ -40,7 +37,8 @@ export default function SalesApp() {
   useEffect(() => {
     const checkAccess = async () => {
       try {
-        await axios.get('/api/auth/me')
+        const res = await axios.get('/api/auth/me')
+        setMe(res.data.user)
         setAccessChecked(true)
         // 동기화 상태 체크
         loadSyncStatus()
@@ -65,6 +63,11 @@ export default function SalesApp() {
 
   const handleSyncAll = async () => {
     if (syncing) return
+    if (!confirm('구글 시트 내용으로 Sales 데이터를 덮어씁니다.\n\n'
+      + '· 매입·프로젝트·주간 일정이 시트와 같아집니다 (시트에 없는 줄은 지워집니다)\n'
+      + '· 웹에서 고친 수금·판매/매입 품목 줄은 시트 내용으로 바뀝니다\n'
+      + '· 웹에서만 넣은 메모, 공급사·비고, 주간 일정 주차 표시는 그대로 둡니다\n\n'
+      + '진행할까요?')) return
     try {
       setSyncing(true)
       await axios.post('/api/sheets/sync')
@@ -150,8 +153,8 @@ export default function SalesApp() {
               </span>
             </button>
 
-            {/* 동기화 버튼 */}
-            <button
+            {/* 동기화 버튼 (관리자만) */}
+            {me?.is_admin && <button
               onClick={handleSyncAll}
               disabled={syncing}
               className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
@@ -161,7 +164,7 @@ export default function SalesApp() {
               <span className="text-sm font-medium">
                 {syncing ? '동기화 중...' : '동기화'}
               </span>
-            </button>
+            </button>}
 
             {/* Year Selector */}
             <div className="flex items-center gap-2">
@@ -201,7 +204,7 @@ export default function SalesApp() {
             // 시트 뷰 모드 - 구글 시트 원본 데이터 표시
             <div className="bg-white rounded-lg p-4 shadow-sm">
               <GoogleSheetView
-                sheetName={SHEET_NAMES[activeTab]}
+                sheetName={`${year}Y ${SHEET_LABELS[activeTab]}`}
                 onSyncComplete={loadSyncStatus}
               />
             </div>

@@ -1,5 +1,6 @@
 """HTC Sales Pipeline — Purchases (매입 관리) API"""
-from fastapi import APIRouter, HTTPException, Query, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Query, BackgroundTasks, Request
+from permissions import require_perm
 from typing import List, Optional
 from pydantic import BaseModel, Field, field_validator
 from datetime import date
@@ -71,7 +72,7 @@ def get_purchases(
     supplier: Optional[str] = None,
     po_number: Optional[str] = None,
     received_status: Optional[str] = None,
-    limit: int = Query(500, ge=1, le=1000),
+    limit: int = Query(5000, ge=1, le=10000),
     offset: int = Query(0, ge=0)
 ):
     """매입 목록 조회"""
@@ -101,7 +102,7 @@ def get_purchases(
         return cur.fetchall()
 
 @router.get("/purchases/by-po")
-def get_purchases_by_po(year: int = 2026):
+def get_purchases_by_po(year: int = CURRENT_YEAR):
     """PO별 매입 그룹화 조회"""
     with db_cursor() as cur:
         cur.execute("""
@@ -121,7 +122,7 @@ def get_purchases_by_po(year: int = 2026):
         return cur.fetchall()
 
 @router.get("/purchases/by-po/{po_number}")
-def get_purchases_by_po_number(po_number: str, year: int = 2026):
+def get_purchases_by_po_number(po_number: str, year: int = CURRENT_YEAR):
     """발주서 번호로 품목 목록 조회"""
     with db_cursor() as cur:
         cur.execute("""
@@ -159,8 +160,9 @@ def get_purchase(purchase_id: int):
         return purchase
 
 @router.post("/purchases")
-def create_purchase(purchase: PurchaseCreate):
+def create_purchase(purchase: PurchaseCreate, request: Request):
     """매입 생성"""
+    require_perm(request, "can_edit_purchase")
     try:
         with db_cursor() as cur:
             # project 문자열로 project_id 찾기 (project_id가 없을 경우)
@@ -196,8 +198,9 @@ def create_purchase(purchase: PurchaseCreate):
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.put("/purchases/{purchase_id}")
-def update_purchase(purchase_id: int, purchase: PurchaseUpdate, background_tasks: BackgroundTasks):
+def update_purchase(purchase_id: int, purchase: PurchaseUpdate, background_tasks: BackgroundTasks, request: Request):
     """매입 업데이트"""
+    require_perm(request, "can_edit_purchase")
     with db_cursor() as cur:
         cur.execute("SELECT * FROM purchases WHERE id = %s", (purchase_id,))
         existing = cur.fetchone()
@@ -239,8 +242,9 @@ def update_purchase(purchase_id: int, purchase: PurchaseUpdate, background_tasks
         return {"message": "매입이 업데이트되었습니다"}
 
 @router.delete("/purchases/{purchase_id}")
-def delete_purchase(purchase_id: int):
+def delete_purchase(purchase_id: int, request: Request):
     """매입 삭제"""
+    require_perm(request, "can_delete_purchase")
     with db_cursor() as cur:
         cur.execute("DELETE FROM purchases WHERE id = %s", (purchase_id,))
         if cur.rowcount == 0:

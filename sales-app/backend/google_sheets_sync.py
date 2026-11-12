@@ -6,6 +6,7 @@ Google Sheets 동기화 모듈
 """
 
 import gspread
+from gspread.utils import rowcol_to_a1
 import pymysql
 import json
 import os
@@ -37,6 +38,8 @@ SYNC_SHEETS = [
 
 def get_spreadsheet():
     """구글 스프레드시트 연결"""
+    if not SPREADSHEET_ID:
+        raise RuntimeError(f"{CURRENT_YEAR}년 구글 스프레드시트 ID가 설정되지 않았습니다 (.env 의 SPREADSHEET_{CURRENT_YEAR})")
     gc = gspread.service_account(filename=CREDENTIALS_FILE)
     return gc.open_by_key(SPREADSHEET_ID)
 
@@ -203,10 +206,8 @@ def write_row_to_sheet(sheet_name, row_index, values):
     spreadsheet = get_spreadsheet()
     sheet = spreadsheet.worksheet(sheet_name)
 
-    # A1 notation으로 범위 지정
-    start_col = 'A'
-    end_col = chr(ord('A') + len(values) - 1)
-    range_notation = f'{start_col}{row_index}:{end_col}{row_index}'
+    # A1 notation으로 범위 지정 (Z 다음 AA… 도 맞게)
+    range_notation = f'{rowcol_to_a1(row_index, 1)}:{rowcol_to_a1(row_index, len(values))}'
 
     sheet.update(range_notation, [values])
     return True
@@ -229,9 +230,7 @@ def update_sheet_range(sheet_name, start_row, start_col, data):
     end_row = start_row + len(data) - 1
     end_col = start_col + len(data[0]) - 1 if data else start_col
 
-    start_col_letter = chr(ord('A') + start_col - 1)
-    end_col_letter = chr(ord('A') + end_col - 1)
-    range_notation = f'{start_col_letter}{start_row}:{end_col_letter}{end_row}'
+    range_notation = f'{rowcol_to_a1(start_row, start_col)}:{rowcol_to_a1(end_row, end_col)}'
 
     sheet.update(range_notation, data)
     return True

@@ -14,7 +14,7 @@ const formatStatusForDisplay = (status) => {
 
 export default function ProjectModal({ project, onSave, onClose }) {
   const [formData, setFormData] = useState({
-    year: 2026,
+    year: new Date().getFullYear(),
     project_no: '',
     customer: '',
     project_name: '',
@@ -43,7 +43,7 @@ export default function ProjectModal({ project, onSave, onClose }) {
     } else if (project) {
       // 신규 추가 모드 (year만 설정된 객체)
       setFormData({
-        year: project.year || 2026,
+        year: project.year || new Date().getFullYear(),
         project_no: '',
         customer: '',
         project_name: '',
@@ -386,7 +386,7 @@ export default function ProjectModal({ project, onSave, onClose }) {
                   <input
                     type="number"
                     value={formData.year}
-                    onChange={(e) => setFormData({ ...formData, year: parseInt(e.target.value) || 2026 })}
+                    onChange={(e) => setFormData({ ...formData, year: parseInt(e.target.value) || new Date().getFullYear() })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                   />
                 </div>

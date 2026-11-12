@@ -38,8 +38,10 @@ SPREADSHEET_IDS = {
     2027: os.getenv("SPREADSHEET_2027", ""),  # 2027년 시트 ID (나중에 추가)
 }
 
-# 현재 연도 스프레드시트 ID
-CURRENT_SPREADSHEET_ID = SPREADSHEET_IDS.get(CURRENT_YEAR, "")
+# 현재 연도 스프레드시트 ID (해가 바뀌면 .env 에 SPREADSHEET_2027 처럼 넣고 Sales 서버 재시작)
+CURRENT_SPREADSHEET_ID = SPREADSHEET_IDS.get(CURRENT_YEAR) or os.getenv(f"SPREADSHEET_{CURRENT_YEAR}", "")
+# 올해 프로젝트 번호 형식 (2026 → '26-01')
+PROJECT_NO_PATTERN = rf"({CURRENT_YEAR % 100:02d}-\d+)"
 
 # Credentials 파일 경로
 GOOGLE_CREDENTIALS_FILE = os.getenv("GOOGLE_CREDENTIALS_FILE", str(Path(__file__).parent / "credentials.json"))

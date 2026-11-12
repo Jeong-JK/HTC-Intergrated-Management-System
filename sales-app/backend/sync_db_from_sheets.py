@@ -9,7 +9,8 @@ import json
 import re
 import pymysql
 from decimal import Decimal
-from config import DB_HOST, DB_USER, DB_PASSWORD, DB_NAME
+from collections import defaultdict
+from config import DB_HOST, DB_USER, DB_PASSWORD, DB_NAME, CURRENT_YEAR, PROJECT_NO_PATTERN
 
 DB_CONFIG = {
     'host': DB_HOST,
@@ -70,7 +71,7 @@ def detect_currency(price_str):
 
 def sync_purchases_from_sheet():
     """매입 시트 데이터를 DB로 동기화"""
-    with open(f'{SHEET_DATA_DIR}/2026Y_매입.json', 'r', encoding='utf-8') as f:
+    with open(f'{SHEET_DATA_DIR}/{CURRENT_YEAR}Y_매입.json', 'r', encoding='utf-8') as f:
         sheet_data = json.load(f)
 
     rows = sheet_data['data']
@@ -160,7 +161,7 @@ def sync_purchases_from_sheet():
         currency = detect_currency(net_price_str)
 
         purchase = {
-            'year': 2026,
+            'year': CURRENT_YEAR,
             'po_number': get_val('po').strip() or None,
             'quote': get_val('quote').strip() or None,
             'oc': get_val('oc').strip() or None,
@@ -196,36 +197,32 @@ def sync_purchases_from_sheet():
 
     # DB 업데이트
     conn = pymysql.connect(**DB_CONFIG)
-    cursor = conn.cursor()
+    cursor = conn.cursor(pymysql.cursors.DictCursor)
+    cols = ['po_number', 'quote', 'oc', 'invoice', 'request_number', 'supplier', 'project', 'product_name', 'quantity',
+            'net_price', 'currency', 'amount', 'expected_date', 'received_status', 'payment_date1', 'payment_amount1',
+            'exchange_rate1', 'payment_date2', 'payment_amount2', 'exchange_rate2']
 
     try:
-        # 기존 2026년 데이터 삭제
-        cursor.execute("DELETE FROM purchases WHERE year = 2026")
-        print(f"기존 2026년 매입 데이터 삭제")
+        # 번호(id)를 지키려고 같은 (PO, 품목) 줄은 고쳐 쓰고 시트에 없는 줄만 지움
+        # (활동 로그 바로가기/되돌리기 유지, 웹에서만 넣은 막대 메모·프로젝트 연결은 그대로)
+        cursor.execute("SELECT id, po_number, product_name FROM purchases WHERE year = %s ORDER BY id", (CURRENT_YEAR,))
+        old = defaultdict(list)
+        for r in cursor.fetchall():
+            old[(r['po_number'], r['product_name'])].append(r['id'])
 
-        # 새 데이터 삽입
         insert_count = 0
         for p in purchases:
-            sql = """
-                INSERT INTO purchases (
-                    year, po_number, quote, oc, invoice, request_number,
-                    supplier, project, product_name, quantity, net_price,
-                    currency, amount, expected_date, received_status,
-                    payment_date1, payment_amount1, exchange_rate1,
-                    payment_date2, payment_amount2, exchange_rate2
-                ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-                )
-            """
-            cursor.execute(sql, (
-                p['year'], p['po_number'], p['quote'], p['oc'], p['invoice'],
-                p['request_number'], p['supplier'], p['project'], p['product_name'],
-                p['quantity'], p['net_price'], p['currency'], p['amount'],
-                p['expected_date'], p['received_status'], p['payment_date1'],
-                p['payment_amount1'], p['exchange_rate1'], p['payment_date2'],
-                p['payment_amount2'], p['exchange_rate2']
-            ))
+            ids = old.get((p['po_number'], p['product_name']))
+            if ids:
+                cursor.execute(f"UPDATE purchases SET {', '.join(c + ' = %s' for c in cols)} WHERE id = %s",
+                               [p[c] for c in cols] + [ids.pop(0)])
+            else:
+                cursor.execute(f"INSERT INTO purchases (year, {', '.join(cols)}) VALUES ({', '.join(['%s'] * (len(cols) + 1))})",
+                               [p['year']] + [p[c] for c in cols])
             insert_count += 1
+        gone = [i for ids in old.values() for i in ids]
+        if gone:
+            cursor.execute(f"DELETE FROM purchases WHERE id IN ({','.join(['%s'] * len(gone))})", gone)
 
         conn.commit()
         print(f"매입 데이터 {insert_count}건 삽입 완료")
@@ -243,7 +240,7 @@ def sync_purchases_from_sheet():
 
 def sync_projects_from_sheet():
     """프로젝트 시트 데이터를 DB로 동기화"""
-    with open(f'{SHEET_DATA_DIR}/2026Y_프로젝트.json', 'r', encoding='utf-8') as f:
+    with open(f'{SHEET_DATA_DIR}/{CURRENT_YEAR}Y_프로젝트.json', 'r', encoding='utf-8') as f:
         sheet_data = json.load(f)
 
     rows = sheet_data['data']
@@ -313,7 +310,7 @@ def sync_projects_from_sheet():
         no_cell = get_val('no').strip()
 
         # 26-XX 형식인 경우만 처리
-        if not re.match(r'^26-\d+', no_cell):
+        if not re.match('^' + PROJECT_NO_PATTERN, no_cell):
             continue
 
         # 발주서기준 행 스킵
@@ -321,7 +318,7 @@ def sync_projects_from_sheet():
             continue
 
         # 프로젝트 번호 추출
-        project_no_match = re.match(r'(26-\d+)', no_cell.split('\n')[0])
+        project_no_match = re.match(PROJECT_NO_PATTERN, no_cell.split('\n')[0])
         if not project_no_match:
             continue
         project_no = project_no_match.group(1)
@@ -356,7 +353,7 @@ def sync_projects_from_sheet():
         current_payment_amount = clean_price(get_val('payment_amount'))
 
         project = {
-            'year': 2026,
+            'year': CURRENT_YEAR,
             'project_no': project_no,
             'customer': get_val('customer').strip().replace('\n', ' ') or None,
             'project_name': get_val('project_name').strip() or None,
@@ -459,24 +456,20 @@ def sync_projects_from_sheet():
 
     # DB 업데이트
     conn = pymysql.connect(**DB_CONFIG)
-    cursor = conn.cursor()
+    cursor = conn.cursor(pymysql.cursors.DictCursor)
 
     try:
-        # 기존 2026년 프로젝트 ID 조회
-        cursor.execute("SELECT id FROM projects WHERE year = 2026")
-        old_project_ids = [row[0] for row in cursor.fetchall()]
-
-        # 기존 관련 데이터 삭제 (해당 프로젝트들)
-        if old_project_ids:
-            placeholders = ','.join(['%s'] * len(old_project_ids))
-            cursor.execute(f"DELETE FROM project_payments WHERE project_id IN ({placeholders})", old_project_ids)
-            cursor.execute(f"DELETE FROM sales_items WHERE project_id IN ({placeholders})", old_project_ids)
-            cursor.execute(f"DELETE FROM purchase_items WHERE project_id IN ({placeholders})", old_project_ids)
-            print(f"기존 2026년 관련 데이터 삭제 (수금, 판매품목, 매입품목)")
-
-        # 기존 2026년 데이터 삭제
-        cursor.execute("DELETE FROM projects WHERE year = 2026")
-        print(f"기존 2026년 프로젝트 데이터 삭제")
+        # 번호(id)를 지키려고 같은 프로젝트 번호는 고쳐 쓰고, 시트에서 사라진 프로젝트만 지움
+        # 웹에서만 넣는 칸(공급사, 비고, 매입 품목의 환율·실제 발주일)은 그대로 둠
+        cursor.execute("SELECT id, project_no FROM projects WHERE year = %s", (CURRENT_YEAR,))
+        old = {r['project_no']: r['id'] for r in cursor.fetchall()}
+        keep_pi = defaultdict(list)
+        if old:
+            ph = ','.join(['%s'] * len(old))
+            cursor.execute(f"SELECT project_id, po_number, product_name, exchange_rate, actual_order_date FROM purchase_items "
+                           f"WHERE project_id IN ({ph}) ORDER BY id", list(old.values()))
+            for r in cursor.fetchall():
+                keep_pi[(r['project_id'], r['po_number'], r['product_name'])].append(r)
 
         # 새 데이터 삽입
         insert_count = 0
@@ -488,22 +481,20 @@ def sync_projects_from_sheet():
             # 총 수금액 계산
             total_payment_amount = sum(pay['amount'] for pay in p['payments']) if p['payments'] else None
 
-            sql = """
-                INSERT INTO projects (
-                    year, project_no, customer, project_name, delivery_date,
-                    order_amount, payment_date, payment_amount, payment_status,
-                    status, order_date
-                ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-                )
-            """
-            cursor.execute(sql, (
-                p['year'], p['project_no'], p['customer'], p['project_name'],
-                p['delivery_date'], p['order_amount'], first_payment_date,
-                total_payment_amount, p['payment_status'], p['status'],
-                p['order_date']
-            ))
-            project_id = cursor.lastrowid
+            values = (p['customer'], p['project_name'], p['delivery_date'], p['order_amount'], first_payment_date,
+                      total_payment_amount, p['payment_status'], p['status'], p['order_date'])
+            project_id = old.pop(p['project_no'], None)
+            if project_id:
+                cursor.execute("""UPDATE projects SET customer = %s, project_name = %s, delivery_date = %s, order_amount = %s,
+                                  payment_date = %s, payment_amount = %s, payment_status = %s, status = %s, order_date = %s
+                                  WHERE id = %s""", values + (project_id,))
+                for t in ('project_payments', 'sales_items', 'purchase_items'):  # 딸린 줄은 시트 기준으로 다시
+                    cursor.execute(f"DELETE FROM {t} WHERE project_id = %s", (project_id,))
+            else:
+                cursor.execute("""INSERT INTO projects (year, project_no, customer, project_name, delivery_date, order_amount,
+                                  payment_date, payment_amount, payment_status, status, order_date)
+                                  VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""", (p['year'], p['project_no']) + values)
+                project_id = cursor.lastrowid
             insert_count += 1
 
             # project_payments 테이블에 모든 수금 정보 삽입
@@ -524,15 +515,26 @@ def sync_projects_from_sheet():
 
             # purchase_items 테이블에 매입 품목 삽입
             for idx, item in enumerate(p['purchase_items']):
+                kept = keep_pi.get((project_id, item['po_number'], item['product_name'])) or [{}]
+                prev = kept.pop(0) if kept[0] else {}
                 cursor.execute("""
                     INSERT INTO purchase_items (project_id, po_number, supplier, product_name, quantity,
                         unit_price_usd, unit_price_krw, total_price_usd, total_price_krw,
-                        expected_date, received_status, payment_status, row_index)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        expected_date, received_status, payment_status, row_index, exchange_rate, actual_order_date)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (project_id, item['po_number'], item['supplier'], item['product_name'],
                       item['quantity'], item['unit_price_usd'], item['unit_price_krw'],
                       item['total_price_usd'], item['total_price_krw'], item['expected_date'],
-                      item['received_status'], item['payment_status'], idx))
+                      item['received_status'], item['payment_status'], idx,
+                      prev.get('exchange_rate'), prev.get('actual_order_date')))
+
+        # 시트에서 사라진 프로젝트
+        gone = list(old.values())
+        if gone:
+            ph = ','.join(['%s'] * len(gone))
+            for t in ('project_payments', 'sales_items', 'purchase_items'):
+                cursor.execute(f"DELETE FROM {t} WHERE project_id IN ({ph})", gone)
+            cursor.execute(f"DELETE FROM projects WHERE id IN ({ph})", gone)
 
         # 총 품목 수 계산
         total_sales = sum(len(p['sales_items']) for p in projects)
@@ -603,7 +605,7 @@ def date_to_week_key(date_str):
 
 def sync_weekly_from_sheet():
     """위클리 시트 데이터를 DB로 동기화"""
-    with open(f'{SHEET_DATA_DIR}/2026Y_Weekly.json', 'r', encoding='utf-8') as f:
+    with open(f'{SHEET_DATA_DIR}/{CURRENT_YEAR}Y_Weekly.json', 'r', encoding='utf-8') as f:
         sheet_data = json.load(f)
 
     rows = sheet_data['data']
@@ -626,7 +628,7 @@ def sync_weekly_from_sheet():
     # 프로젝트별 발주일 조회
     conn_temp = pymysql.connect(**DB_CONFIG)
     cursor_temp = conn_temp.cursor(pymysql.cursors.DictCursor)
-    cursor_temp.execute("SELECT project_no, order_date FROM projects WHERE year = 2026")
+    cursor_temp.execute("SELECT project_no, order_date FROM projects WHERE year = %s", (CURRENT_YEAR,))
     project_order_dates = {row['project_no']: row['order_date'] for row in cursor_temp.fetchall()}
     cursor_temp.close()
     conn_temp.close()
@@ -661,7 +663,7 @@ def sync_weekly_from_sheet():
         # 프로젝트 번호 (병합 셀 고려)
         if project_no_cell:
             # 26-XX 형식만 추출
-            match = re.match(r'(26-\d+)', project_no_cell.split('\n')[0])
+            match = re.match(PROJECT_NO_PATTERN, project_no_cell.split('\n')[0])
             if match:
                 current_project_no = match.group(1)
 
@@ -755,7 +757,7 @@ def sync_weekly_from_sheet():
             week_data = original_values
 
         weekly_item = {
-            'year': 2026,
+            'year': CURRENT_YEAR,
             'project_no': current_project_no,
             'customer_project': current_customer_project or '-',
             'product_name': product_name or '-',
@@ -771,30 +773,33 @@ def sync_weekly_from_sheet():
 
     # DB 업데이트
     conn = pymysql.connect(**DB_CONFIG)
-    cursor = conn.cursor()
+    cursor = conn.cursor(pymysql.cursors.DictCursor)
 
     try:
-        # 기존 2026년 데이터 삭제
-        cursor.execute("DELETE FROM weekly_schedule WHERE year = 2026")
-        print(f"기존 2026년 위클리 데이터 삭제")
+        # 번호(id) 유지: 같은 (프로젝트 번호, 품목) 줄은 고쳐 쓰고 시트에 없는 줄만 지움
+        # 웹에서 넣은 메모(비고·막대·첫 주)와 웹에서 옮긴 주차 표시는 지킴 (주간 일정은 웹 → 시트로 보내는 기능이 없음)
+        cursor.execute("SELECT id, project_no, product_name, week_data FROM weekly_schedule WHERE year = %s ORDER BY id", (CURRENT_YEAR,))
+        old = defaultdict(list)
+        for r in cursor.fetchall():
+            old[(r['project_no'], r['product_name'])].append(r)
 
-        # 새 데이터 삽입
         insert_count = 0
         for w in weekly_items:
-            sql = """
-                INSERT INTO weekly_schedule (
-                    year, project_no, customer_project, product_name,
-                    quantity, supplier, notes, week_data
-                ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s
-                )
-            """
-            cursor.execute(sql, (
-                w['year'], w['project_no'], w['customer_project'],
-                w['product_name'], w['quantity'], w['supplier'],
-                w['notes'], w['week_data']
-            ))
+            rows = old.get((w['project_no'], w['product_name']))
+            if rows:
+                r = rows.pop(0)
+                cursor.execute("""UPDATE weekly_schedule SET customer_project = %s, quantity = %s, supplier = %s, week_data = %s
+                                  WHERE id = %s""", (w['customer_project'], w['quantity'], w['supplier'],
+                                                     r['week_data'] or w['week_data'], r['id']))
+            else:
+                cursor.execute("""INSERT INTO weekly_schedule (year, project_no, customer_project, product_name,
+                                  quantity, supplier, notes, week_data) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+                               (w['year'], w['project_no'], w['customer_project'], w['product_name'],
+                                w['quantity'], w['supplier'], w['notes'], w['week_data']))
             insert_count += 1
+        gone = [r['id'] for rows in old.values() for r in rows]
+        if gone:
+            cursor.execute(f"DELETE FROM weekly_schedule WHERE id IN ({','.join(['%s'] * len(gone))})", gone)
 
         conn.commit()
         print(f"위클리 데이터 {insert_count}건 삽입 완료")

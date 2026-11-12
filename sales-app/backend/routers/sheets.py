@@ -1,5 +1,7 @@
 """Google Sheets 동기화 API 라우터"""
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
+import hmac
+import os
 from pydantic import BaseModel
 from typing import Optional, List, Any
 import sys
@@ -18,12 +20,22 @@ from google_sheets_sync import (
 )
 from database import db_cursor
 from sheet_write_sync import disable_sheet_sync, enable_sheet_sync
-from config import get_logger
+from config import get_logger, CURRENT_YEAR, PROJECT_NO_PATTERN
 from sync_db_from_sheets import sync_purchases_from_sheet, sync_projects_from_sheet, sync_weekly_from_sheet
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/sheets", tags=["sheets"])
+
+# 웹훅 키: .env 에 SHEET_WEBHOOK_TOKEN 을 넣으면 Apps Script 주소 끝에 ?token=… 이 있어야만 받음 (없으면 지금처럼 열림)
+WEBHOOK_TOKEN = os.getenv("SHEET_WEBHOOK_TOKEN", "")
+
+
+def _require_admin(request: Request):
+    """시트 → DB 덮어쓰기는 관리자만"""
+    user = getattr(request.state, "user", None) or {}
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="동기화는 관리자만 할 수 있습니다")
 
 
 class CellUpdate(BaseModel):
@@ -74,11 +86,15 @@ def get_sheet(sheet_name: str):
 
 
 @router.post("/sync")
-def sync_sheets():
-    """모든 시트 동기화 (구글 → 로컬 JSON → DB)"""
+def sync_sheets(request: Request):
+    """모든 시트 동기화 (구글 → 로컬 JSON → DB) — 관리자만"""
+    _require_admin(request)
     try:
-        # 1단계: 구글 시트 → JSON 파일 동기화
+        # 1단계: 구글 시트 → JSON 파일 동기화 — 하나라도 못 받아오면 예전 사본으로 DB 를 덮어쓰지 않게 여기서 멈춤
         results = sync_all_sheets()
+        failed = [n for n, r in results.items() if isinstance(r, str)]
+        if failed:
+            raise HTTPException(status_code=500, detail=f"시트를 받아오지 못해 DB 는 그대로 뒀습니다: {', '.join(failed)} — {results[failed[0]]}")
 
         # 2단계: JSON → DB 동기화 (자동)
         db_results = {}
@@ -89,7 +105,8 @@ def sync_sheets():
             logger.info(f"DB 동기화 완료: {db_results}")
         except Exception as db_err:
             logger.error(f"DB 동기화 오류: {db_err}")
-            db_results['error'] = str(db_err)
+            done = ", ".join(db_results) or "없음"
+            raise HTTPException(status_code=500, detail=f"시트는 받아왔지만 DB 반영 중 오류가 났습니다 (반영된 것: {done}) — {db_err}")
 
         return {
             "success": True,
@@ -97,13 +114,16 @@ def sync_sheets():
             "results": results,
             "db_sync": db_results
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"동기화 오류: {str(e)}")
 
 
 @router.post("/sync/{sheet_name}")
-def sync_single_sheet(sheet_name: str):
-    """특정 시트만 동기화 (JSON + DB)"""
+def sync_single_sheet(sheet_name: str, request: Request):
+    """특정 시트만 동기화 (JSON + DB) — 관리자만"""
+    _require_admin(request)
     if sheet_name not in SYNC_SHEETS:
         raise HTTPException(status_code=400, detail=f"'{sheet_name}'은(는) 동기화 대상 시트가 아닙니다.")
     try:
@@ -122,6 +142,7 @@ def sync_single_sheet(sheet_name: str):
             logger.info(f"DB 동기화 완료: {sheet_name} = {db_count}건")
         except Exception as db_err:
             logger.error(f"DB 동기화 오류: {db_err}")
+            raise HTTPException(status_code=500, detail=f"시트는 받아왔지만 DB 반영 중 오류가 났습니다 — {db_err}")
 
         return {
             "success": True,
@@ -129,6 +150,8 @@ def sync_single_sheet(sheet_name: str):
             "row_count": row_count,
             "db_count": db_count
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"동기화 오류: {str(e)}")
 
@@ -179,8 +202,10 @@ def update_range(sheet_name: str, update: RangeUpdate):
 
 
 @router.post("/webhook/sheet-update")
-def sheet_update_webhook(webhook: SheetWebhook):
+def sheet_update_webhook(webhook: SheetWebhook, token: str = ""):
     """구글 시트에서 직접 수정 시 Apps Script가 호출하는 webhook"""
+    if WEBHOOK_TOKEN and not hmac.compare_digest(token, WEBHOOK_TOKEN):
+        raise HTTPException(status_code=403, detail="권한이 없습니다")
     try:
         logger.info(f"Webhook received: {webhook.sheet_name}, row={webhook.row}, col={webhook.col}, value={webhook.value}")
 
@@ -188,12 +213,25 @@ def sheet_update_webhook(webhook: SheetWebhook):
         disable_sheet_sync()
 
         try:
-            # 시트 데이터 로드
+            # 줄이 추가/이동됐을 수 있어 매번 최신 시트를 받아 그 줄을 찾음 (실패하면 저장된 사본)
+            fresh = False
+            if webhook.sheet_name in SYNC_SHEETS:
+                try:
+                    sync_sheet_raw(webhook.sheet_name)
+                    fresh = True
+                except Exception as e:
+                    logger.warning(f"시트 새로 읽기 실패 — 저장된 사본 사용: {e}")
             sheet_data = get_sheet_data(webhook.sheet_name)
             if not sheet_data:
                 return {"success": False, "message": "시트 데이터를 찾을 수 없습니다"}
 
             rows = sheet_data['data']
+            r, c = webhook.row - 1, webhook.col - 1
+            if fresh and 0 <= r < len(rows):
+                # 수식 칸은 수식 글자 대신 시트에 보이는 계산 결과를 씀
+                webhook.value = rows[r][c] if c < len(rows[r]) else ''
+            elif str(webhook.value or '').lstrip().startswith('='):
+                return {"success": False, "message": "수식 값은 시트를 다시 읽을 수 없어 반영하지 않았습니다"}
 
             # 매입 시트 처리
             if '매입' in webhook.sheet_name:
@@ -282,15 +320,22 @@ def update_purchase_from_webhook(rows, webhook):
     if not po_number or not product_name:
         return {"success": False, "message": "PO번호 또는 품목명이 없습니다"}
 
+    # 같은 (PO, 품목)이 여러 줄이면 시트에서 몇 번째인지로 DB 줄을 고름 (동기화가 시트 순서대로 번호를 매김)
+    nth = sum(1 for prev in rows[header_row_idx + 1:row_idx]
+              if po_col < len(prev) and product_col < len(prev)
+              and prev[po_col].strip() == po_number and prev[product_col].strip() == product_name)
+
     # DB에서 찾아서 업데이트
     with db_cursor() as cur:
-        # 레코드 찾기
+        # 레코드 찾기 (올해 것만)
         cur.execute("""
             SELECT id FROM purchases
-            WHERE po_number = %s AND product_name = %s
-        """, (po_number, product_name))
+            WHERE po_number = %s AND product_name = %s AND year = %s
+            ORDER BY id
+        """, (po_number, product_name, CURRENT_YEAR))
 
-        purchase = cur.fetchone()
+        found = cur.fetchall()
+        purchase = found[nth] if nth < len(found) else (found[0] if found else None)
         if not purchase:
             return {"success": False, "message": f"매입을 찾을 수 없습니다: PO={po_number}, 품목={product_name}"}
 
@@ -353,7 +398,7 @@ def update_project_from_webhook(rows, webhook):
         return {"success": False, "message": "프로젝트 번호가 없습니다"}
 
     no_cell = row_data[1].strip()
-    match = re.match(r'(26-\d+)', no_cell.split('\n')[0])
+    match = re.match(PROJECT_NO_PATTERN, no_cell.split('\n')[0])
     if not match:
         return {"success": False, "message": f"프로젝트 번호를 찾을 수 없습니다: {no_cell}"}
 
@@ -362,7 +407,7 @@ def update_project_from_webhook(rows, webhook):
     # DB에서 찾아서 업데이트
     with db_cursor() as cur:
         # 레코드 찾기
-        cur.execute("SELECT id FROM projects WHERE project_no = %s", (project_no,))
+        cur.execute("SELECT id FROM projects WHERE project_no = %s AND year = %s", (project_no, CURRENT_YEAR))
         project = cur.fetchone()
 
         if not project:
@@ -391,6 +436,16 @@ def convert_value_for_db(field_name, value):
     """시트 값을 DB 값으로 변환"""
     if value is None or value == '':
         return None
+
+    # 입금률: "100%" → 1.0, "0.5" → 0.5
+    if field_name == 'payment_status':
+        m = re.search(r'(-?\d+(?:\.\d+)?)\s*%', str(value))
+        if m:
+            return float(m.group(1)) / 100
+        try:
+            return float(str(value).replace(',', ''))
+        except ValueError:
+            return None
 
     # 날짜 필드
     if 'date' in field_name:

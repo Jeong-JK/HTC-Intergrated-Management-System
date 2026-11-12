@@ -46,7 +46,8 @@ SPECS = {
          "fields": {"year": "연도", "project_no": "번호", "customer": "고객사", "project_name": "프로젝트명", "supplier": "공급사",
                     "order_date": "수주일", "delivery_date": "납품일", "order_amount": "수주금액", "payment_date": "입금일",
                     "payment_amount": "입금액", "payment_status": "입금 상태", "status": "상태", "notes": "비고"},
-         "undo": "cud", "children": [("project_payments", "project_id"), ("sales_items", "project_id"), ("purchase_items", "project_id")]},
+         "undo": "cud", "children": [("project_payments", "project_id"), ("sales_items", "project_id"), ("purchase_items", "project_id")],
+         "unique": [("year", "project_no")]},  # 되살릴 때 같은 번호 프로젝트가 이미 있으면 막음 (동기화로 다시 생긴 경우)
         {"path": r"^/api/weekly/(\d+)$", "create": "/api/weekly", "table": "weekly_schedule", "name": "#{project_no} {customer_project}",
          "fields": {"customer_project": "고객/프로젝트", "product_name": "품목", "quantity": "수량", "supplier": "공급사",
                     "notes": "비고", "week_data": "주간 일정", "bar_note": "막대 메모", "first_week_note": "첫 주 메모"}, "undo": "cud"},
@@ -346,6 +347,12 @@ def undo(cursor_factory, app, data, force=False):
         if data["op"] == "delete":
             if _rows(cur, table, "id", data["ids"]):
                 raise UndoError("같은 번호의 항목이 이미 있어 되살릴 수 없습니다")
+            for cols in spec.get("unique", []):
+                for r in data["groups"][0]["rows"]:
+                    cur.execute(f"SELECT 1 FROM `{table}` WHERE " + " AND ".join(f"`{c}` = %s" for c in cols) + " LIMIT 1",
+                                [r[c] for c in cols])
+                    if cur.fetchone():
+                        raise UndoError(f"같은 {'/'.join(str(r[c]) for c in cols)} 항목이 이미 있어 되살릴 수 없습니다")
             _restore_tree(cur, data)
             return {"op": "create", "table": table, "ids": data["ids"], "after": _j(_state(cur, spec, data["ids"]))}, None
 

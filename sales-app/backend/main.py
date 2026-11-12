@@ -33,10 +33,9 @@ def locked_response(request: Request, app_name: str, detail: str):
 # 인증 체크 미들웨어
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        # 정적 파일 요청 및 purchases API, webhook은 체크하지 않음
+        # 정적 파일, webhook(구글 Apps Script), 재고 서버 전용 주소는 체크하지 않음
         if (request.url.path.startswith("/assets/") or
             request.url.path.endswith(".png") or
-            request.url.path.startswith("/api/purchases") or
             request.url.path.startswith("/api/internal/") or  # 재고 서버 전용 (서버끼리 키 확인)
             request.url.path.startswith("/api/sheets/webhook/")):
             return await call_next(request)

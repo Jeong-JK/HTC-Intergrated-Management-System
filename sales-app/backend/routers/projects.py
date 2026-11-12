@@ -79,7 +79,7 @@ def get_projects(
     year: int = CURRENT_YEAR,
     status: Optional[str] = None,
     customer: Optional[str] = None,
-    limit: int = Query(200, ge=1, le=1000),
+    limit: int = Query(1000, ge=1, le=5000),
     offset: int = Query(0, ge=0)
 ):
     """프로젝트 목록 조회 (판매/매입 품목 포함)"""
@@ -188,8 +188,9 @@ def get_project(project_id: int):
         }
 
 @router.post("/projects")
-def create_project(project: ProjectCreate):
+def create_project(project: ProjectCreate, request: Request):
     """프로젝트 생성"""
+    require_perm(request, "can_edit_project")
     with db_cursor() as cur:
         # 프로젝트 생성
         cur.execute("""

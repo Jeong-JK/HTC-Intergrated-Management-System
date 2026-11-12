@@ -62,7 +62,7 @@ export default function PurchasesTab({ year }) {
 
   const handleAddPurchase = () => {
     // 신규 매입용 빈 객체 (year만 설정)
-    setEditingPurchase({ year: year || 2026 })
+    setEditingPurchase({ year: year || new Date().getFullYear() })
   }
 
   const handleDeletePurchase = async (purchase) => {

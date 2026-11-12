@@ -3,7 +3,7 @@ import { Calendar, GripVertical, Plus, Trash2, X, ChevronUp } from 'lucide-react
 import { getWeeklySchedules, updateWeeklySchedule, createWeeklySchedule, deleteWeeklySchedule } from '../api'
 import { PROJECT_COLORS } from '../utils/projectCommon'
 
-// 2026년도 월별 주차 정보
+// 월별 주차 칸 수 (구글 시트 Weekly 배치와 같음 — 2027년 시트 배치가 다르면 여기 맞춰야 함)
 const WEEKS_2026 = {
   1: 5, 2: 5, 3: 5, 4: 5, 5: 5, 6: 5, 7: 5, 8: 5, 9: 4, 10: 5, 11: 5, 12: 5
 }
@@ -98,7 +98,7 @@ const weekIndexToDate = (weekIndex) => {
   const day = (week - 1) * 7 + 1
   const paddedMonth = String(month).padStart(2, '0')
   const paddedDay = String(Math.min(day, 28)).padStart(2, '0')
-  return `2026-${paddedMonth}-${paddedDay}`
+  return `${new Date().getFullYear()}-${paddedMonth}-${paddedDay}`
 }
 
 export default function WeeklyTab({ year, isActive, hideDone }) {
