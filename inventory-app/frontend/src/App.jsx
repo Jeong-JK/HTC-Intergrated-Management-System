@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage.jsx'
 import UserManagement from './pages/UserManagement.jsx'
 import BoardPage from './pages/BoardPage.jsx'
 import AdminDrive from './pages/AdminDrive.jsx'
+import ActivityLogPage from './pages/ActivityLogPage.jsx'
 import WorkLogPage from './pages/WorkLogPage.jsx'
 import InventoryApp from './apps/InventoryApp.jsx'
 import { SITE } from './site.js'
@@ -60,6 +61,7 @@ function AppRoutes() {
       <Route path="/" element={<ProtectedRoute><MainHub /></ProtectedRoute>} />
       <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
       <Route path="/admin-drive" element={<ProtectedRoute><AdminDrive /></ProtectedRoute>} />
+      <Route path="/activity-logs" element={<ProtectedRoute><ActivityLogPage /></ProtectedRoute>} />
       <Route path="/board" element={<ProtectedRoute><BoardPage /></ProtectedRoute>} />
       <Route path="/work-log" element={<ProtectedRoute><WorkLogPage /></ProtectedRoute>} />
       <Route path="/inventory/*" element={<ProtectedRoute><InventoryApp /></ProtectedRoute>} />

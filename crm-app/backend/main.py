@@ -1,4 +1,5 @@
 """HTC Partner CRM — FastAPI Main"""
+from activity_client import report_activity
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -48,7 +49,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
                         # 인증 성공 - user 정보 저장
                         user_data = response.json()
                         request.state.user = user_data.get("user", {})
-                        return await call_next(request)
+                        result = await call_next(request)
+                        await report_activity(request, "crm", result.status_code)
+                        return result
                     if response.status_code == 423:
                         return locked_response(request, "crm", response.json().get("detail"))
             except Exception as e:

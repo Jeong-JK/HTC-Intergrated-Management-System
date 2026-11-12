@@ -34,7 +34,8 @@ export default function UserManagement() {
     can_write_worklog: false,
     can_edit_worklog: false,
     can_delete_worklog: false,
-    can_manage_worklog: false
+    can_manage_worklog: false,
+    can_view_activity_log: false
   })
   const [error, setError] = useState('')
 
@@ -82,7 +83,8 @@ export default function UserManagement() {
       can_write_worklog: false,
       can_edit_worklog: false,
       can_delete_worklog: false,
-      can_manage_worklog: false
+      can_manage_worklog: false,
+      can_view_activity_log: false
     })
     setError('')
     setShowModal(true)
@@ -119,7 +121,8 @@ export default function UserManagement() {
       can_write_worklog: !!u.can_write_worklog,
       can_edit_worklog: !!u.can_edit_worklog,
       can_delete_worklog: !!u.can_delete_worklog,
-      can_manage_worklog: !!u.can_manage_worklog
+      can_manage_worklog: !!u.can_manage_worklog,
+      can_view_activity_log: !!u.can_view_activity_log
     })
     setError('')
     setShowModal(true)
@@ -159,7 +162,8 @@ export default function UserManagement() {
           can_write_worklog: form.can_write_worklog,
           can_edit_worklog: form.can_edit_worklog,
           can_delete_worklog: form.can_delete_worklog,
-          can_manage_worklog: form.can_manage_worklog
+          can_manage_worklog: form.can_manage_worklog,
+          can_view_activity_log: form.can_view_activity_log
         }
         if (form.password) {
           updateData.password = form.password
@@ -532,6 +536,14 @@ export default function UserManagement() {
                         <span className="text-xs text-slate-600">업무일지관리자 <span className="text-slate-400">(타인 열람만)</span></span>
                       </label>
                     </div>
+                  </div>
+
+                  {/* 활동 로그 */}
+                  <div className="bg-amber-50 rounded-lg p-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={form.can_view_activity_log} onChange={(e) => setForm({ ...form, can_view_activity_log: e.target.checked })} className="w-4 h-4 text-amber-600 border-slate-300 rounded focus:ring-amber-500" />
+                      <span className="text-sm text-slate-700">활동 로그 조회 <span className="text-xs text-slate-400">(전 사용자의 로그인·수정 기록)</span></span>
+                    </label>
                   </div>
                 </div>
               )}

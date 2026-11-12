@@ -154,6 +154,7 @@ class UserUpdate(BaseModel):
     can_edit_worklog: Optional[bool] = None
     can_delete_worklog: Optional[bool] = None
     can_manage_worklog: Optional[bool] = None
+    can_view_activity_log: Optional[bool] = None
 
 class ProfileUpdate(BaseModel):
     email: Optional[str] = None
@@ -166,7 +167,8 @@ PERMISSION_FIELDS = [
     'can_edit_project', 'can_delete_project', 'can_edit_weekly', 'can_delete_weekly',
     'can_add_company', 'can_edit_company', 'can_delete_company',
     'can_view_meeting', 'can_add_meeting', 'can_delete_meeting', 'can_edit_contact', 'can_transfer_contact',
-    'can_access_worklog', 'can_write_worklog', 'can_edit_worklog', 'can_delete_worklog', 'can_manage_worklog'
+    'can_access_worklog', 'can_write_worklog', 'can_edit_worklog', 'can_delete_worklog', 'can_manage_worklog',
+    'can_view_activity_log'
 ]
 
 # ========== Auth Endpoints ==========
@@ -239,6 +241,9 @@ def login(req: LoginRequest, response: Response, request: Request):
     # Create session token and save to DB
     session_token = secrets.token_hex(32)
     create_session(session_token, user['id'], session_data)
+    from routers.activity import record_login  # activity 가 auth 를 import 하므로 여기서
+    with db_cursor() as cur:
+        record_login(cur, user, ip, master)
 
     # Set cookie (domain=.hltac.com for subdomain sharing)
     response.set_cookie(

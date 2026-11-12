@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { Package, TrendingUp, Users, LogOut, Settings, Shield, UserCog, X, Check, Mail, Phone, Lock, MessageSquare, Clock, Banknote, HardDrive, CalendarDays } from 'lucide-react'
+import { Package, TrendingUp, Users, LogOut, Settings, Shield, UserCog, X, Check, Mail, Phone, Lock, MessageSquare, Clock, Banknote, HardDrive, CalendarDays, History } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { updateProfile, getUnreadPostCount, getUnreadCommentNotificationCount, getUsers, getMaintenance, saveMaintenance, runOps, getOpsStatus } from '../api.js'
 import { Modal, Btn } from '../components/Common.jsx'
@@ -319,6 +319,17 @@ export default function MainHub() {
                 <UserCog size={18} />
                 <span className="text-sm font-medium">내 정보</span>
               </button>
+
+              {/* 활동 로그: 관리자 또는 '활동 로그 조회' 권한 */}
+              {(user?.is_admin || user?.can_view_activity_log) && (
+                <button
+                  onClick={() => navigate('/activity-logs')}
+                  className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 text-amber-700 rounded-lg hover:bg-amber-100 transition-colors"
+                >
+                  <History size={18} />
+                  <span className="text-sm font-medium">활동 로그</span>
+                </button>
+              )}
 
               {/* 관리자 메뉴 */}
               {user?.is_admin && (

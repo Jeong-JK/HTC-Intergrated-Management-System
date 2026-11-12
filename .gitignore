@@ -86,3 +86,6 @@ google_drive_helper.py
 # Deploy scripts
 deploy.sh
 **/deploy.sh
+
+# 서버끼리 쓰는 키 (활동 로그)
+.config/

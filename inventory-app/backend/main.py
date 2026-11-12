@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 
 from config import APP_TITLE, APP_VERSION, CORS_ORIGINS, PIPELINE_DB_HOST, PIPELINE_DB_USER, PIPELINE_DB_PASSWORD, PIPELINE_DB_NAME
 from database import init_db
-from routers import items, rental, delivery, stats, inbound, rack, settings, companies, alerts, auth, posts, drive, work_logs, maintenance, ops
+from routers import items, rental, delivery, stats, inbound, rack, settings, companies, alerts, auth, posts, drive, work_logs, maintenance, ops, activity
 
 # 환율 캐시 (1시간마다 갱신)
 exchange_rate_cache = {"rate": None, "updated": None}
@@ -48,6 +48,21 @@ async def maintenance_guard(request: Request, call_next):
     return await call_next(request)
 
 
+# 활동 로그: 성공한 추가/수정/삭제를 세션 주인 이름으로 기록 (기록 실패해도 응답은 그대로)
+@app.middleware("http")
+async def activity_logger(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if activity.should_log(request.method, path, response.status_code):
+        ip = request.headers.get("x-real-ip") or (request.client.host if request.client else None)
+        try:
+            await run_in_threadpool(activity.record_session, request.cookies.get("session_token"),
+                                    activity.inventory_system(path), request.method, path, ip)
+        except Exception as e:
+            print(f"활동 로그 기록 실패: {e}")
+    return response
+
+
 @app.on_event("startup")
 def startup():
     init_db()
@@ -67,6 +82,7 @@ app.include_router(drive.router,     prefix="/api")
 app.include_router(work_logs.router, prefix="/api")
 app.include_router(maintenance.router, prefix="/api")
 app.include_router(ops.router, prefix="/api")
+app.include_router(activity.router, prefix="/api")
 
 # 환율 API (exchangerate-api.com 사용)
 @app.get("/api/exchange-rate")

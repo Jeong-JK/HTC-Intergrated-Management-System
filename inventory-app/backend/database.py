@@ -253,6 +253,24 @@ ALTER TABLE work_log_masters
 ALTER TABLE work_log_masters
     ADD COLUMN IF NOT EXISTS group_id BIGINT DEFAULT NULL,
     ADD INDEX IF NOT EXISTS idx_wlm_group (group_id);
+
+-- 활동 로그(요약: 누가 언제 어디서 무엇을). 사용자를 지워도 기록이 남도록 FK 없음, 1년 보관
+CREATE TABLE IF NOT EXISTS activity_logs (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id    INT          NOT NULL,
+    user_name  VARCHAR(50),
+    sys_key    VARCHAR(20)  NOT NULL,   -- hub / inventory / worklog / sales / crm
+    method     VARCHAR(10)  NOT NULL,   -- POST / PUT / DELETE / LOGIN
+    path       VARCHAR(255) NOT NULL,
+    ip         VARCHAR(45),
+    created_at DATETIME     DEFAULT NOW(),
+    INDEX idx_al_time (created_at),
+    INDEX idx_al_user (user_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS last_login_at DATETIME DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS can_view_activity_log BOOLEAN DEFAULT FALSE;
 """
 
 def init_db():
