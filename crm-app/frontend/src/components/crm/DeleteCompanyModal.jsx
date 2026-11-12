@@ -3,6 +3,8 @@ import { Trash2, X } from 'lucide-react'
 import * as api from '../../api'
 
 // === Delete Company Modal ===
+const CONFIRM_TEXT = '직접 삭제합니다'
+
 export default function DeleteCompanyModal({ onClose, companies, onSuccess }) {
   const [selectedCompanyId, setSelectedCompanyId] = useState(null)
   const [selectedCompanyName, setSelectedCompanyName] = useState('')
@@ -11,6 +13,8 @@ export default function DeleteCompanyModal({ onClose, companies, onSuccess }) {
   const [selectedDropdownIndex, setSelectedDropdownIndex] = useState(0)
   const dropdownRef = useRef(null)
   const [deleting, setDeleting] = useState(false)
+  const [confirmText, setConfirmText] = useState('')
+  const confirmed = confirmText.trim().replace(/\.$/, '') === CONFIRM_TEXT // 끝의 마침표는 있어도 됨
 
   const filteredCompanies = companies.filter(c =>
     c.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -36,6 +40,7 @@ export default function DeleteCompanyModal({ onClose, companies, onSuccess }) {
     setSelectedCompanyName(company.name)
     setSearchTerm(company.name)
     setShowDropdown(false)
+    setConfirmText('') // 다른 업체를 고르면 다시 입력
   }
 
   const handleDelete = async () => {
@@ -44,7 +49,8 @@ export default function DeleteCompanyModal({ onClose, companies, onSuccess }) {
       return
     }
 
-    if (!confirm(`'${selectedCompanyName}' 업체를 삭제하시겠습니까?\n\n업체, 팀, 담당자, 미팅내역이 모두 삭제됩니다.`)) {
+    if (!confirmed) {
+      alert(`'${CONFIRM_TEXT}'를 입력해야 삭제됩니다.`)
       return
     }
 
@@ -142,6 +148,23 @@ export default function DeleteCompanyModal({ onClose, companies, onSuccess }) {
               <p className="text-lg font-bold text-slate-900 mt-1">{selectedCompanyName}</p>
             </div>
           )}
+
+          {selectedCompanyId && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                삭제하려면 <span className="font-bold text-red-600">{CONFIRM_TEXT}</span> 를 입력하세요
+              </label>
+              <input
+                type="text"
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && confirmed && !deleting) handleDelete() }}
+                placeholder={CONFIRM_TEXT}
+                autoComplete="off"
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 ${confirmed ? 'border-red-400' : 'border-slate-300'}`}
+              />
+            </div>
+          )}
         </div>
 
         <div className="bg-white border-t border-slate-200 px-6 py-4 flex gap-2 justify-end rounded-b-lg">
@@ -152,7 +175,7 @@ export default function DeleteCompanyModal({ onClose, companies, onSuccess }) {
           </button>
           <button
             onClick={handleDelete}
-            disabled={deleting || !selectedCompanyId}
+            disabled={deleting || !selectedCompanyId || !confirmed}
             className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed">
             {deleting ? '삭제 중...' : '삭제'}
           </button>
